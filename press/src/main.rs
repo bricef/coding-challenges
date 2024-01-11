@@ -2,25 +2,24 @@
 use clap::{Arg, ArgAction};
 use clap::Command;
 use huffman::HuffmanEncoding;
-use postcard::{from_bytes, to_allocvec};
+
 use std::fs::File;
 use std::io::{Read, Write, BufReader, BufWriter, BufRead};
-use bimap::BiMap;
-use bitvec::prelude::*;
+
 use serde::{Serialize, Deserialize};
 
 mod huffman;
 
 fn compress(input: &Vec<u8>, output: &mut Vec<u8>) {
-    let encoding = HuffmanEncoding::from_data_vec(input);
+    let mut encoding = HuffmanEncoding::from_data_vec(input);
     let filestream = encoding.encode(input);
     
-    let mut code_table: Vec<u8> = encoding.into_vec();
+    let mut code_table: Vec<u8> = encoding.save();
     let mut data = filestream.into_vec();
 
     // let mut data = to_allocvec(&p).unwrap();
-    output.append(&mut data)
-
+    output.append(&mut code_table);
+    output.append(&mut data);
     
 }
 
@@ -85,6 +84,8 @@ fn main() -> Result<(), std::io::Error>  {
     compress(&in_buf, &mut out_buf);
 
     output.write(&out_buf)?;
+
+    eprintln!("in: {}, out: {}, ratio: {}", in_buf.len(), out_buf.len(), out_buf.len() as f64/in_buf.len() as f64);
 
 
     return Ok(());

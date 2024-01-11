@@ -10,5 +10,4 @@ atty = "0.2.14"
 bimap = { version = "0.6.3", features = ["serde"] }
 bitvec = { version = "1.0.1", features = ["serde"] }
 clap = "4.4.14"
-postcard = { version = "1.0.8", features = ["alloc"] }
 serde = { version = "1.0.195", features = ["derive"] }

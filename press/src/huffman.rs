@@ -1,10 +1,11 @@
+
 use std::collections::HashMap;
 use std::collections::BinaryHeap;
 use core::hash::Hash;
 use bitvec::prelude::*;
 use bimap::BiMap;
 use bitvec::vec::BitVec;
-use serde::Deserialize;
+
 use serde::Serialize;
 
 pub enum HuffmanTree {
@@ -13,7 +14,7 @@ pub enum HuffmanTree {
         symbol: u8,
     },
     Node{
-        freq:u64,
+        freq: u64,
         left: Box<HuffmanTree>,
         right: Box<HuffmanTree>
     }
@@ -131,24 +132,40 @@ impl HuffmanEncoding{
 
     pub fn from_frequencies(frequencies: HashMap<u8, u64>) -> HuffmanEncoding {
         let tree = HuffmanTree::from_frequencies(&frequencies);
-        HuffmanEncoding::from_tree(&tree, frequencies)
+        HuffmanEncoding::from_tree(&tree)
     }
 
-    pub fn from_tree(tree: &HuffmanTree, freqs: HashMap<u8, u64>) -> HuffmanEncoding {
+    pub fn from_tree(tree: &HuffmanTree) -> HuffmanEncoding {
         HuffmanEncoding{
             encoding: descend(tree, BitVec::new())
         }
     }
 
-    pub fn to_vec() -> Vec<u8> {
+    pub fn save(&mut self) -> Vec<u8> {
+        let mut out: Vec<u8> = vec![0x07, 0x4E, 0xE5];
+        // let max_bitfield_size = self.encoding.right_values().map(|f| f.len()).max().unwrap();
+
+        for (&l, r) in self.encoding.iter() {
+            let len = r.len();
+            if len > std::u8::MAX.into() {
+                panic!("Cannot encode bitfield length in 8 bits");
+            }
+            r.to_owned().set_uninitialized(false);
+            let mut bits = r.clone().into_vec();
+            
+            // { symbol: u8, len: u8, bits: [u8, len]}
+            out.push(l);
+            out.push(len as u8);
+            out.append(&mut bits)
+        }
+        return out;
+    }
+
+    pub fn deserialize(d: &Vec<u8>) -> HuffmanEncoding {
         todo!();
     }
 
-    pub fn from_saved_vec(d: &Vec<u8>) -> HuffmanEncoding {
-        todo!()
-    }
-
-    pub fn encode(self,input: &Vec<u8>) -> BitVec<u8, Lsb0> {
+    pub fn encode(&self,input: &Vec<u8>) -> BitVec<u8, Lsb0> {
         let mut filestream = bitvec![u8, Lsb0;];
         
         for c in input{
@@ -160,7 +177,7 @@ impl HuffmanEncoding{
     }
 
     pub fn decode(input: &BitVec<u8, Lsb0>) -> Vec<u8> {
-        vec![]
+        todo!();
     }
 }
 
