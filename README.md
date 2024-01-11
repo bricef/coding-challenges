@@ -6,7 +6,7 @@ Implementation of the coding challenges from https://codingchallenges.fyi
 
 - [x] [Write Your Own `wc` Tool](./wc)
 - [ ] Write Your Own JSON Parser
-- [ ] Write Your Own Compression Tool
+- [ ] [Write Your Own Compression Tool](./press)
 - [ ] Write Your Own `cut` Tool
 - [ ] Write Your Own Load Balancer
 - [ ] Write Your Own Sort Tool
