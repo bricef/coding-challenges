@@ -6,7 +6,12 @@ use bitvec::prelude::*;
 use bimap::BiMap;
 use bitvec::vec::BitVec;
 
-use serde::Serialize;
+
+#[allow(dead_code)]
+#[derive(Debug)]
+pub enum HuffmanError {
+    String(&'static str)
+}
 
 pub enum HuffmanTree {
     Terminal {
@@ -97,6 +102,13 @@ pub struct HuffmanEncoding{
     pub encoding: BiMap<u8, BitVec<u8, Lsb0>>
 }
 
+impl PartialEq for HuffmanEncoding {
+    fn eq(&self, other: &Self) -> bool {
+        self.encoding == other.encoding
+    }
+}
+impl Eq for HuffmanEncoding {}
+
 fn descend(t: &HuffmanTree, seq: BitVec<u8, Lsb0>) -> BiMap<u8, BitVec<u8, Lsb0>> {
     match t {
         HuffmanTree::Node {left, right, .. } => {
@@ -142,7 +154,7 @@ impl HuffmanEncoding{
     }
 
     pub fn save(&mut self) -> Vec<u8> {
-        let mut out: Vec<u8> = vec![0x07, 0x4E, 0xE5];
+        let mut out: Vec<u8> = Vec::new();
         // let max_bitfield_size = self.encoding.right_values().map(|f| f.len()).max().unwrap();
 
         for (&l, r) in self.encoding.iter() {
@@ -151,18 +163,43 @@ impl HuffmanEncoding{
                 panic!("Cannot encode bitfield length in 8 bits");
             }
             r.to_owned().set_uninitialized(false);
-            let mut bits = r.clone().into_vec();
+            let bits = r.clone().into_vec();
+            let _bytes = bits.len();
             
             // { symbol: u8, len: u8, bits: [u8, len]}
             out.push(l);
             out.push(len as u8);
-            out.append(&mut bits)
+            out.append(&mut bits.clone());
+
+            // println!("encoding {} as {} with len {} in {} bytes", l as char, r, len, bytes);
         }
         return out;
     }
 
-    pub fn deserialize(d: &Vec<u8>) -> HuffmanEncoding {
-        todo!();
+    pub fn restore(d: &Vec<u8>) -> Result<HuffmanEncoding, HuffmanError> {
+        let mut encoding: BiMap<u8, BitVec<u8,Lsb0>> = BiMap::new(); 
+
+        let mut index: usize = 0;
+        loop {
+            let c = *d.get(index).expect("Error deserialising input file");
+            let len = *d.get(index+1).expect("Error deserialising input file");
+            let size = (len as f64 / 8.0).ceil() as usize;
+            let bits: &[u8] = &d[index+2..index+size+2];
+            let mut v: BitVec<u8, Lsb0> = BitVec::from_slice(bits);
+            v.truncate(len as usize);
+
+            // println!("decoding {} to {} in {} bytes with {} bits", c as char, v, size, len);
+
+            encoding.insert(c, v);
+
+            index += size+2;
+
+            if index >= d.len() { break }
+        }        
+
+        return Ok(HuffmanEncoding{
+            encoding: encoding
+        });
     }
 
     pub fn encode(&self,input: &Vec<u8>) -> BitVec<u8, Lsb0> {
@@ -176,20 +213,37 @@ impl HuffmanEncoding{
        filestream
     }
 
-    pub fn decode(input: &BitVec<u8, Lsb0>) -> Vec<u8> {
-        todo!();
+    pub fn decode(self, _input: &Vec<u8>) -> Vec<u8> {
+        // &BitVec<u8, Lsb0>
+        vec![]
+    }
+
+    pub fn diff(&self, other: &Self) -> Vec<(u8, BitVec<u8,Lsb0>, BitVec<u8,Lsb0>)> {
+        let mut diffs = Vec::new();
+        for (l,r) in self.encoding.iter(){
+            let sr = self.encoding.get_by_left(l).unwrap();
+            let or = other.encoding.get_by_left(l).unwrap();
+            if  sr != or {
+                diffs.push((
+                    *l,
+                    r.clone(),
+                    or.clone()
+                ))
+            }
+        }
+        return diffs;
     }
 }
 
 
-impl Serialize for HuffmanEncoding {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer 
-    {
-        todo!()
-    }
-}
+// impl Serialize for HuffmanEncoding {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer 
+//     {
+//         todo!()
+//     }
+// }
 
 // impl<'de> Deserialize<'de> for HuffmanEncoding {
 //     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -214,7 +268,7 @@ fn _show_encoding(freq: &HashMap<u8, u64>, en: &BiMap<u8, BitVec>){
 impl std::fmt::Debug for HuffmanEncoding {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (c, v) in self.encoding.iter(){
-            write!(f, "{} <> {}", *c as char, v)?
+            write!(f, "{} <> {}\n", *c as char, v)?
         }
         write!(f, "")
     }
