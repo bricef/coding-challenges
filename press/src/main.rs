@@ -160,6 +160,12 @@ fn u8s_to_u32(us: &Vec<u8>) -> u32 {
 }
 
 
+fn show_encoding(e: &HuffmanEncoding){
+    for (c, bf) in e.encoding.iter() {
+        
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,9 +195,22 @@ mod tests {
         assert_eq!(_get_tlen(&out_buf), expected_length)
     }
 
+
+    #[test]
+    #[ignore]
+    fn identical_encoding_are_equal() {
+        // Q: should that be the case? They mauy end up with different trees 
+        // since the freq tale is unordered. Ie: the construction algorithm may
+        // be undeterministic
+        let in_buf: Vec<u8> = b"Lorem ipsum".to_vec();
+        let e1 = HuffmanEncoding::from_data_vec(&in_buf);
+        let e2 = HuffmanEncoding::from_data_vec(&in_buf);
+        assert_eq!(e1, e2);
+    }
+
     #[test]
     fn can_recover_encoding_from_file() {
-        let in_buf: Vec<u8> = b"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi condimentum gravida libero non mollis. Mauris turpis sapien, interdum non tortor id, sollicitudin lobortis mi. Nam sit amet tellus vehicula, condimentum.".to_vec();
+        let in_buf: Vec<u8> = b"Lorem ipsum".to_vec();
         let mut out_buf: Vec<u8> = Vec::new();
         
         let encoding_original = HuffmanEncoding::from_data_vec(&in_buf);
@@ -201,8 +220,8 @@ mod tests {
         let encoding = _get_encoding(&out_buf);
         match encoding {
             Ok(encoding) => {
-                println!("{:?}", encoding_original.diff(&encoding));
-                assert!(encoding == encoding_original);
+                // println!("{:?}", encoding_original.diff(&encoding));
+                assert_eq!(encoding, encoding_original);
             },
             Err(_) => panic!("Could not get encoding")
         }

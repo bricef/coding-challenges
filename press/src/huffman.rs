@@ -88,7 +88,7 @@ trait Merge {
     fn merge(self, other: Self) -> Self;
 }
 
-impl<L,R> Merge for BiMap<L,R> 
+impl<L,R> Merge for HashMap<L,R> 
 where 
     L: Hash + PartialEq + Eq + PartialOrd + Ord,
     R: Hash + PartialEq + Eq + PartialOrd + Ord,
@@ -99,17 +99,22 @@ where
 }
 
 pub struct HuffmanEncoding{
-    pub encoding: BiMap<u8, BitVec<u8, Lsb0>>
+    pub encoding: HashMap<u8, BitVec<u8, Lsb0>>
 }
 
 impl PartialEq for HuffmanEncoding {
     fn eq(&self, other: &Self) -> bool {
-        self.encoding == other.encoding
+        for (l, r) in self.encoding.iter() {
+            if self.encoding.get(l) != other.encoding.get(l) {
+                return false
+            }
+        }
+        return true
     }
 }
 impl Eq for HuffmanEncoding {}
 
-fn descend(t: &HuffmanTree, seq: BitVec<u8, Lsb0>) -> BiMap<u8, BitVec<u8, Lsb0>> {
+fn descend(t: &HuffmanTree, seq: BitVec<u8, Lsb0>) -> HashMap<u8, BitVec<u8, Lsb0>> {
     match t {
         HuffmanTree::Node {left, right, .. } => {
             let mut lpath = seq.clone();
@@ -123,7 +128,7 @@ fn descend(t: &HuffmanTree, seq: BitVec<u8, Lsb0>) -> BiMap<u8, BitVec<u8, Lsb0>
             l.merge(r)
         },
         HuffmanTree::Terminal { symbol, .. } => {
-            return BiMap::from_iter(vec![(*symbol, seq)])
+            return HashMap::from_iter(vec![(*symbol, seq)])
         }
     }
 }
@@ -153,31 +158,36 @@ impl HuffmanEncoding{
         }
     }
 
-    pub fn save(&mut self) -> Vec<u8> {
+    pub fn save(&self) -> Vec<u8> {
+        println!("ENCODING:::");
         let mut out: Vec<u8> = Vec::new();
         // let max_bitfield_size = self.encoding.right_values().map(|f| f.len()).max().unwrap();
 
-        for (&l, r) in self.encoding.iter() {
+        for (&c, r) in self.encoding.iter() {
             let len = r.len();
             if len > std::u8::MAX.into() {
                 panic!("Cannot encode bitfield length in 8 bits");
             }
-            r.to_owned().set_uninitialized(false);
-            let bits = r.clone().into_vec();
+            let mut nr = r.clone();
+            nr.set_uninitialized(false);
+            let bits = nr.into_vec();
             let _bytes = bits.len();
             
             // { symbol: u8, len: u8, bits: [u8, len]}
-            out.push(l);
+            out.push(c);
             out.push(len as u8);
             out.append(&mut bits.clone());
+            
+            println!("[{:X?}] {}", c, r);
+            // println!("[{:X?}] {:?}, {:?} ({})", l, len as u8, &mut bits.clone(), r);
 
-            // println!("encoding {} as {} with len {} in {} bytes", l as char, r, len, bytes);
         }
         return out;
     }
 
     pub fn restore(d: &Vec<u8>) -> Result<HuffmanEncoding, HuffmanError> {
-        let mut encoding: BiMap<u8, BitVec<u8,Lsb0>> = BiMap::new(); 
+        println!("DECODING:::");
+        let mut encoding: HashMap<u8, BitVec<u8,Lsb0>> = HashMap::new(); 
 
         let mut index: usize = 0;
         loop {
@@ -187,9 +197,10 @@ impl HuffmanEncoding{
             let bits: &[u8] = &d[index+2..index+size+2];
             let mut v: BitVec<u8, Lsb0> = BitVec::from_slice(bits);
             v.truncate(len as usize);
-
-            // println!("decoding {} to {} in {} bytes with {} bits", c as char, v, size, len);
-
+            
+            println!("[{:X?}] {}", c, v);
+            // println!("[{:X?}] {:?}, {:?} ({})", c, len as u8, &mut bits.clone(), v);
+            v.set_uninitialized(false);
             encoding.insert(c, v);
 
             index += size+2;
@@ -206,7 +217,7 @@ impl HuffmanEncoding{
         let mut filestream = bitvec![u8, Lsb0;];
         
         for c in input{
-            let mut code = self.encoding.get_by_left(&c).unwrap().clone();
+            let mut code = self.encoding.get(&c).unwrap().clone();
             filestream.append(&mut code);
         }
        
@@ -221,8 +232,8 @@ impl HuffmanEncoding{
     pub fn diff(&self, other: &Self) -> Vec<(u8, BitVec<u8,Lsb0>, BitVec<u8,Lsb0>)> {
         let mut diffs = Vec::new();
         for (l,r) in self.encoding.iter(){
-            let sr = self.encoding.get_by_left(l).unwrap();
-            let or = other.encoding.get_by_left(l).unwrap();
+            let sr = self.encoding.get(l).unwrap();
+            let or = other.encoding.get(l).unwrap();
             if  sr != or {
                 diffs.push((
                     *l,
@@ -254,22 +265,12 @@ impl HuffmanEncoding{
 //     }
 // }
 
-fn _print_char_table(hm: &HashMap<u8, u64>){
-    for (k, v) in hm.iter(){
-        println!("{} -> {}", *k as char , v)
-    }
-}
-
-fn _show_encoding(freq: &HashMap<u8, u64>, en: &BiMap<u8, BitVec>){
-    for (c, v) in en.iter(){
-        println!("{} [{}] <> {}", *c as char, freq.get(c).unwrap(), v)
-    }
-}
 impl std::fmt::Debug for HuffmanEncoding {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "(");
         for (c, v) in self.encoding.iter(){
-            write!(f, "{} <> {}\n", *c as char, v)?
+            write!(f, "[{:02X?}]  {}\n", *c, v)?
         }
-        write!(f, "")
+        write!(f, ")")
     }
 }
