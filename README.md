@@ -47,3 +47,5 @@ Implementation of the coding challenges from https://codingchallenges.fyi
 - [ ] Write Your Own HTTP(S) Load Tester
 - [ ] Write Your Own `tr` Tool.
 - [ ] Write Your Own Tetris
+- [ ] Build Your Own DNS Forwarder
+- [ ] Build Your Own Port Scanner
