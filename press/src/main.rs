@@ -9,62 +9,34 @@ use std::io::{Read, Write, BufReader, BufWriter, BufRead};
 mod huffman;
 
 
-const MAGIC: [u8; 3] = [0x07, 0x4E, 0xE5];
+const MAGIC: [u8; 5] = [b'P', b'R', b'E', b'S', b'S'];
 
 fn compress(input: &Vec<u8>, output: &mut Vec<u8>) {
-    let mut encoding = HuffmanEncoding::from_data_vec(input);
-    let filestream = encoding.encode(input);
+    let encoding = HuffmanEncoding::from_data_vec(input);
+    let mut filestream = encoding.encode(input);
+    let mut code_table = encoding.save();
+    let mut tlen = u32_to_u8s(code_table.len() as u32);
     
-    // addmagic prefix
     output.append(&mut Vec::from(MAGIC));
-    let mut code_table: Vec<u8> = encoding.save();
-    let tlen = code_table.len() as u32;
-    output.append(&mut u32_to_u8s(tlen));
-
-    // println!("tlen compress: {}", tlen);
+    output.append(&mut tlen);
     output.append(&mut code_table);
-
-    let mut data = filestream.into_vec();
-
-    // let mut data = to_allocvec(&p).unwrap();
-    output.append(&mut data);
-    
-}
-
-fn _get_tlen(input: &Vec<u8>) -> u32 {
-    if input[0..3] != MAGIC {
-        panic!("File is not in press format.");
-    }
-    u8s_to_u32(&Vec::from(&input[3..7]))
-}
-
-fn _get_encoding(input: &Vec<u8>) -> Result<HuffmanEncoding, huffman::HuffmanError> {
-    if input[0..3] != MAGIC {
-        panic!("File is not in press format.");
-    }
-    let tlen:u32 = u8s_to_u32(&Vec::from(&input[3..7]));
-
-    let table_raw = &input[7..(tlen as usize)+7];
-    return HuffmanEncoding::restore(&Vec::from(table_raw));
-    
+    output.append(&mut filestream);   
 }
 
 fn decompress(input: &Vec<u8>, output: &mut Vec<u8>) {
-    if input[0..3] != MAGIC {
+    if input[0..MAGIC.len()] != MAGIC {
         panic!("File is not in press format.");
     }
-    let tlen:u32 = u8s_to_u32(&Vec::from(&input[3..7]));
 
-    let table_raw = &input[7..(tlen as usize)+7];
-    let encoding = HuffmanEncoding::restore(&Vec::from(table_raw));
-    match encoding {
-        Ok(encoding) => {
-            let data_raw = &input[(tlen as usize)+7..];
-            let mut data = encoding.decode(&Vec::from(data_raw));
-            output.append(&mut data);
-        },
-        Err(_) => panic!("Could not decode encoding from file")
-    }
+    let table_length = u8s_to_u32(&Vec::from(&input[MAGIC.len()..MAGIC.len()+4])) as usize;
+    let table_raw = &input[MAGIC.len()+4..table_length+MAGIC.len()+4];
+    let data_raw = &input[table_length+MAGIC.len()+4..];
+
+    let encoding = HuffmanEncoding::restore_from(&Vec::from(table_raw));
+
+    assert!(encoding.encoding.contains_key(&huffman::Symbol::EOT));
+    let mut data = encoding.decode(&Vec::from(data_raw));
+    output.append(&mut data);
 }
 
 fn main() -> Result<(), std::io::Error>  {
@@ -135,7 +107,7 @@ fn main() -> Result<(), std::io::Error>  {
 
     output.write(&out_buf)?;
 
-    eprintln!("in: {}, out: {}, ratio: {}", in_buf.len(), out_buf.len(), out_buf.len() as f64/in_buf.len() as f64);
+    // eprintln!("in: {}, out: {}, ratio: {}", in_buf.len(), out_buf.len(), out_buf.len() as f64/in_buf.len() as f64);
 
     return Ok(());
 }
@@ -159,17 +131,17 @@ fn u8s_to_u32(us: &Vec<u8>) -> u32 {
     return out;
 }
 
-
-fn show_encoding(e: &HuffmanEncoding){
-    for (c, bf) in e.encoding.iter() {
-        
-    }
-}
-
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
+    fn _get_tlen(input: &Vec<u8>) -> u32 {
+        if input[0..MAGIC.len()] != MAGIC {
+            panic!("File is not in press format.");
+        }
+        u8s_to_u32(&Vec::from(&input[3..7]))
+    }
 
     #[test]
     fn can_encode_decode_u32(){
@@ -186,7 +158,7 @@ mod tests {
         let in_buf: Vec<u8> = b"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi condimentum gravida libero non mollis. Mauris turpis sapien, interdum non tortor id, sollicitudin lobortis mi. Nam sit amet tellus vehicula, condimentum.".to_vec();
         let mut out_buf: Vec<u8> = Vec::new();
         
-        let mut encoding_original = HuffmanEncoding::from_data_vec(&in_buf);
+        let encoding_original = HuffmanEncoding::from_data_vec(&in_buf);
         let saved = encoding_original.save();
         let expected_length = saved.len() as u32;
 
@@ -195,36 +167,37 @@ mod tests {
         assert_eq!(_get_tlen(&out_buf), expected_length)
     }
 
-
     #[test]
-    #[ignore]
-    fn identical_encoding_are_equal() {
-        // Q: should that be the case? They mauy end up with different trees 
-        // since the freq tale is unordered. Ie: the construction algorithm may
-        // be undeterministic
-        let in_buf: Vec<u8> = b"Lorem ipsum".to_vec();
-        let e1 = HuffmanEncoding::from_data_vec(&in_buf);
-        let e2 = HuffmanEncoding::from_data_vec(&in_buf);
-        assert_eq!(e1, e2);
+    fn encoding_will_always_have_eot(){
+        let in_buf: Vec<u8> = b"".to_vec();
+        let encoding = HuffmanEncoding::from_data_vec(&in_buf);
+
+        assert!(encoding.encoding.contains_key(&huffman::Symbol::EOT));
     }
 
     #[test]
-    fn can_recover_encoding_from_file() {
-        let in_buf: Vec<u8> = b"Lorem ipsum".to_vec();
+    fn decoded_table_has_eot(){
+        let in_buf: Vec<u8> = b"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi condimentum gravida libero non mollis. Mauris turpis sapien, interdum non tortor id, sollicitudin lobortis mi. Nam sit amet tellus vehicula, condimentum.".to_vec();
+        
+        let encoding = HuffmanEncoding::from_data_vec(&in_buf);
+        let saved = encoding.save();
+        let restored = HuffmanEncoding::restore_from(&saved);
+
+        assert!(restored.encoding.contains_key(&huffman::Symbol::EOT));
+    }
+
+    #[test]
+    fn can_compress_decompress(){
+
+        let in_buf: Vec<u8> = b"Hello World".to_vec();
+        let mut compressed_buf: Vec<u8> = Vec::new();
         let mut out_buf: Vec<u8> = Vec::new();
         
-        let encoding_original = HuffmanEncoding::from_data_vec(&in_buf);
+        compress(&in_buf, &mut compressed_buf);
+        println!("COMPRESSED...");
+        decompress(&compressed_buf, &mut out_buf);
 
-        compress(&in_buf, &mut out_buf);
-
-        let encoding = _get_encoding(&out_buf);
-        match encoding {
-            Ok(encoding) => {
-                // println!("{:?}", encoding_original.diff(&encoding));
-                assert_eq!(encoding, encoding_original);
-            },
-            Err(_) => panic!("Could not get encoding")
-        }
+        assert_eq!(in_buf, out_buf);
 
     }
 
@@ -232,9 +205,9 @@ mod tests {
     fn test_encoding_serialise_deserialise() {
         let in_buf: Vec<u8> = b"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi condimentum gravida libero non mollis. Mauris turpis sapien, interdum non tortor id, sollicitudin lobortis mi. Nam sit amet tellus vehicula, condimentum.".to_vec();
         
-        let mut encoding = HuffmanEncoding::from_data_vec(&in_buf);
+        let encoding = HuffmanEncoding::from_data_vec(&in_buf);
         let saved = encoding.save();
-        let restored = HuffmanEncoding::restore(&saved).unwrap();
+        let restored = HuffmanEncoding::restore_from(&saved);
 
         assert_eq!(encoding, restored);
     }
