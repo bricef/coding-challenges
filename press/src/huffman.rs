@@ -196,12 +196,12 @@ impl HuffmanEncoding {
                 Symbol::EOT => continue,
             }
         }
-        eprintln!("{:?}", out);
+        // eprintln!("{:?}", out);
         return out;
     }
 
     pub fn restore_from(d: &Vec<u8>) -> HuffmanEncoding {
-        eprintln!("{:?}", d);
+        // eprintln!("{:?}", d);
         let mut encoding: HashMap<Symbol, BitVec<u8, Lsb0>> = HashMap::new();
 
         let mut index: usize = 0;
