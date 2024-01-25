@@ -48,7 +48,7 @@ fn main() -> Result<(), std::io::Error> {
     let matches = Command::new("Press")
         .version("1.0")
         .author("Brice Fernandes <brice@fractallambda.com>")
-        .about("Basic file compressor.")
+        .about("Basic Huffam coding file compressor.")
         .arg(Arg::new("INPUT").help("Input file"))
         .arg(Arg::new("OUTPUT").help("Output file."))
         .arg(
@@ -200,7 +200,6 @@ mod tests {
         let mut out_buf: Vec<u8> = Vec::new();
 
         compress(&in_buf, &mut compressed_buf);
-        println!("COMPRESSED...");
         decompress(&compressed_buf, &mut out_buf);
 
         assert_eq!(in_buf, out_buf);
@@ -217,9 +216,4 @@ mod tests {
         assert_eq!(encoding, restored);
     }
 
-    #[test]
-    fn sanity_check() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
 }

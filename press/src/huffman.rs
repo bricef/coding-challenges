@@ -140,6 +140,7 @@ fn descend(t: &HuffmanTree, seq: BitVec<u8, Lsb0>) -> HashMap<Symbol, BitVec<u8,
 
 fn frequency_map(input: &Vec<u8>) -> HashMap<Symbol, u64> {
     let mut hm: HashMap<Symbol, u64> = HashMap::new();
+    
     hm.insert(Symbol::EOT, 1);
 
     for &b in input {
