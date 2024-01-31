@@ -41,7 +41,7 @@ Implementation of the coding challenges from https://codingchallenges.fyi
 - [ ] Write Your Own Google Keep
 - [ ] Write Your Own Pong
 - [ ] Write Your Own Redis CLI Tool
-- [ ] Write Your Own Network Modelling Tool
+- [ ] [Write Your Own Network Modelling Tool](./net-modeller/)
 - [ ] Write Your Own Social Media Tool
 - [ ] Write Your Own `curl`
 - [ ] Write Your Own HTTP(S) Load Tester
@@ -49,3 +49,4 @@ Implementation of the coding challenges from https://codingchallenges.fyi
 - [ ] Write Your Own Tetris
 - [ ] Build Your Own DNS Forwarder
 - [ ] Build Your Own Port Scanner
+- [ ] Build Your Own yq
