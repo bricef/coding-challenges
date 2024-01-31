@@ -1,10 +1,26 @@
 # `press`: a Huffman file compressor
 
+See [the original challenge](https://codingchallenges.fyi/challenges/challenge-huffman).
+
 ## About
 
-`press` is a simple file compression utility which uses [Huffman encodig](https://en.wikipedia.org/wiki/Huffman_coding) to compress and decompress files. It is a learning project and should not be used in production.
+`press` is a simple file compression utility which uses [Huffman encodig](https://en.wikipedia.org/wiki/Huffman_coding) to compress and decompress files, built in [Rust](https://www.rust-lang.org/). It is a learning project and should not be used in production.
 
 The compression ratios are not bad, and compare reasonably to existing file compression utilities (same order of magnitude compression ratios).
+
+## Build, Install, Run
+
+To build, navigate to the challenge directory and run 
+
+```sh
+$ cargo build --release
+```
+
+You'll then find the executale in `target/release/press`. You can also install the tool to uyour home directory using cargo as well:
+
+```sh
+$ cargo install --path .
+```
 
 ## Limitations
 
@@ -22,7 +38,7 @@ The compression ratios are not bad, and compare reasonably to existing file comp
 - [ ] Instrument code for timing compression and decompression benchmarks.
 - [ ] Create simple test wrapper to benchmark against different inputs.
 - [ ] Integrate with [Serde](https://serde.rs/) crate for (de)serialisation.
-- [ ] Define a standard good-enough encoding using a corpus and include this as a default (compare sizes with default vs custom and create a heuristic to decide whether to use custom or default encoding)
+- [ ] Define a standard good-enough encoding using a corpus and include this as a default (compare sizes with default using distance metric on freq table vs custom and create a heuristic to decide whether to use custom or default encoding)
 
 ## Key learnings
 

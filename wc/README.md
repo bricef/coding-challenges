@@ -1,8 +1,24 @@
 # `wc` clone
 
+See [the original challenge](https://codingchallenges.fyi/challenges/challenge-wc).
+
 ## About
 
-This simple program counts bytes, words and lines in a file.
+This simple program counts bytes, words and lines in a file, built in [Rust](https://www.rust-lang.org/).
+
+## Build, Install, Run
+
+To build, navigate to the challenge directory and run 
+
+```sh
+$ cargo build --release
+```
+
+You'll then find the executale in `target/release/wc`. You can also install the tool to uyour home directory using cargo as well:
+
+```sh
+$ cargo install --path .
+```
 
 ## learnings
 
