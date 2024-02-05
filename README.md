@@ -1,12 +1,20 @@
 # Coding Challenges
 
-Implementation of the coding challenges from https://codingchallenges.fyi
+Implementation of the coding challenges from a variety of sources, for example https://codingchallenges.fyi
+
+## Completed 
+
+- [x] [Write Your Own `wc` Tool](./wc)
+- [x] [Write Your Own Compression Tool](./press)
+
+## In Progress
+
+- [ ] [File deduplicator](./deduplicator)
+- [ ] [Write Your Own Network Modelling Tool](./net-modeller/)
 
 ## Challenges
 
-- [x] [Write Your Own `wc` Tool](./wc)
 - [ ] Write Your Own JSON Parser
-- [x] [Write Your Own Compression Tool](./press)
 - [ ] Write Your Own `cut` Tool
 - [ ] Write Your Own Load Balancer
 - [ ] Write Your Own Sort Tool
@@ -41,7 +49,6 @@ Implementation of the coding challenges from https://codingchallenges.fyi
 - [ ] Write Your Own Google Keep
 - [ ] Write Your Own Pong
 - [ ] Write Your Own Redis CLI Tool
-- [ ] [Write Your Own Network Modelling Tool](./net-modeller/)
 - [ ] Write Your Own Social Media Tool
 - [ ] Write Your Own `curl`
 - [ ] Write Your Own HTTP(S) Load Tester
