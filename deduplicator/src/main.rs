@@ -7,6 +7,7 @@ use std::io::Read;
 use std::path::PathBuf;
 use crc::{Crc, CRC_32_CKSUM};
 use xxhash_rust::xxh3::xxh3_64;
+use dialoguer::Select;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Candidate{
@@ -142,11 +143,11 @@ fn autodelete(dups: &Vec<Vec<Candidate>>) -> Result<(), std::io::Error> {
 
 struct Action {
     label: String,
-    action: dyn FnOnce() -> Result<(), std::io::Error>,
+    action: Box<dyn FnOnce() -> Result<(), std::io::Error>>,
 }
 
 
-fn candidates_to_delete_choices(duplicates: &Vec<Candidate>) -> Vec<Action> {
+fn candidates_to_delete_choices(duplicates: Vec<Candidate>) -> Vec<Action> {
     duplicates
         .iter()
         .map(|c| Action {
@@ -156,27 +157,36 @@ fn candidates_to_delete_choices(duplicates: &Vec<Candidate>) -> Vec<Action> {
         .collect()
 }
 
-fn prompt_choices(_choices: &Vec<Action>) -> Result<(), std::io::Error> {
-    
+fn prompt_choices(_choices: Vec<Action>) -> Result<(), std::io::Error> {
+    let items = vec!["foo", "bar", "baz"];
+
+    let selection = Select::new()
+        .with_prompt("What do you choose?")
+        .items(&items)
+        .interact()
+        .unwrap();
+
+    println!("You chose: {}", items[selection]);
     Ok(())
 }
 
 fn prompt_delete(dups: &Vec<Vec<Candidate>>) -> Result<(), std::io::Error> {
     for duplicates in dups {
+        let local_dups = duplicates.clone();
         let choices = vec![
             Action {
                 label: "Ignore".to_string(),
-                action: || Ok(()),
+                action: Box::new(|| Ok(())),
             },
             Action {
                 label: "Keep one".to_string(),
-                action: || {
-                    let del_choices = candidates_to_delete_choices(&duplicates);
-                    prompt_choices(&del_choices)
-                },
+                action: Box::new(|| {
+                    let del_choices = candidates_to_delete_choices(local_dups);
+                    prompt_choices(del_choices)
+                }),
             },
         ];
-        let _action = prompt_choices(&choices);
+        let _action = prompt_choices(choices);
     }
     Ok(())
 }
