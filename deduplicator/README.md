@@ -4,6 +4,13 @@
 
 A file deduplicator in rust.
 
+## Enhancements
+
+- [ ] Fuzzy matching mode using edit distance between files.
+- [ ] Prompt with numbers to speed up option selection
+- [ ] Check on delete
+- [ ] Deduplicate code for match checking
+
 ## Notes
 
 Libraries for prompting:

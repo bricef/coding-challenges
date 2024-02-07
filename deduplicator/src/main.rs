@@ -1,16 +1,16 @@
 use clap::Command;
 use clap::{Arg, ArgAction};
-use walkdir::WalkDir;
+use crc::{Crc, CRC_32_CKSUM};
+use dialoguer::Select;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{self, PathBuf};
-use crc::{Crc, CRC_32_CKSUM};
+use walkdir::WalkDir;
 use xxhash_rust::xxh3::xxh3_64;
-use dialoguer::Select;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Candidate{
+struct Candidate {
     path: PathBuf,
     size: u64,
     crc: u32,
@@ -19,8 +19,7 @@ struct Candidate{
 
 const CRC: Crc<u32> = Crc::<u32>::new(&CRC_32_CKSUM);
 
-
-fn candidates(directory: String) -> Result<Vec<Candidate>, std::io::Error>{
+fn candidates(directory: String) -> Result<Vec<Candidate>, std::io::Error> {
     let mut result: Vec<Candidate> = vec![];
     let walker = WalkDir::new(directory).into_iter();
     for entry in walker {
@@ -41,7 +40,7 @@ fn candidates(directory: String) -> Result<Vec<Candidate>, std::io::Error>{
 
 fn size_matches(cs: Vec<Candidate>) -> Result<Vec<Vec<Candidate>>, std::io::Error> {
     let mut index: HashMap<u64, Vec<Candidate>> = HashMap::new();
-    
+
     // make index
     for c in cs.into_iter() {
         index
@@ -57,27 +56,25 @@ fn size_matches(cs: Vec<Candidate>) -> Result<Vec<Vec<Candidate>>, std::io::Erro
 
 fn crc_of_path(path: &PathBuf) -> Result<u32, std::io::Error> {
     let mut file = File::open(path)?;
-    let mut buf =Vec::new();
+    let mut buf = Vec::new();
     file.read_to_end(&mut buf)?;
     return Ok(CRC.checksum(&buf));
 }
 
 fn crc_matches<'a>(cs: Vec<Vec<Candidate>>) -> Result<Vec<Vec<Candidate>>, std::io::Error> {
     let mut output: Vec<Vec<Candidate>> = Vec::new();
-    for size_matches in cs{
+    for size_matches in cs {
         let mut index: HashMap<u32, Vec<Candidate>> = HashMap::new();
         for mut c in size_matches {
             let crc = crc_of_path(&c.path)?;
             c.crc = crc;
             index
                 .entry(crc)
-                .and_modify(|v|{ v.push(c.clone())})
+                .and_modify(|v| v.push(c.clone()))
                 .or_insert(vec![c]);
         }
-        let mut remaining_matches: Vec<Vec<Candidate>> = index
-            .into_values()
-            .filter(|cs| cs.len() > 1)
-            .collect();
+        let mut remaining_matches: Vec<Vec<Candidate>> =
+            index.into_values().filter(|cs| cs.len() > 1).collect();
         output.append(&mut remaining_matches);
     }
     Ok(output)
@@ -85,42 +82,38 @@ fn crc_matches<'a>(cs: Vec<Vec<Candidate>>) -> Result<Vec<Vec<Candidate>>, std::
 
 fn hash_of_path(path: &PathBuf) -> Result<u64, std::io::Error> {
     let mut file = File::open(path)?;
-    let mut buf =Vec::new();
+    let mut buf = Vec::new();
     file.read_to_end(&mut buf)?;
     return Ok(xxh3_64(&buf));
 }
 
-fn hash_matches<'a>(cs: Vec<Vec<Candidate>>) -> Result<Vec<Vec<Candidate>>, std::io::Error>{
+fn hash_matches<'a>(cs: Vec<Vec<Candidate>>) -> Result<Vec<Vec<Candidate>>, std::io::Error> {
     let mut output: Vec<Vec<Candidate>> = Vec::new();
-    for size_matches in cs{
+    for size_matches in cs {
         let mut index: HashMap<u64, Vec<Candidate>> = HashMap::new();
         for mut c in size_matches {
             let hash = hash_of_path(&c.path)?;
             c.hash = hash;
             index
                 .entry(hash)
-                .and_modify(|v|{ v.push(c.clone()) })
+                .and_modify(|v| v.push(c.clone()))
                 .or_insert(vec![c]);
         }
-        let mut remaining_matches = index
-            .into_values()
-            .filter(|cs| cs.len() > 1)
-            .collect();
+        let mut remaining_matches = index.into_values().filter(|cs| cs.len() > 1).collect();
         output.append(&mut remaining_matches);
     }
     Ok(output)
 }
 
-
 fn find_duplicates(directory: String) -> Result<Vec<Vec<Candidate>>, std::io::Error> {
     let candidates = candidates(directory)?;
     let s_matches = size_matches(candidates)?;
-    let c_matches= crc_matches(s_matches)?;
+    let c_matches = crc_matches(s_matches)?;
     let h_matches = hash_matches(c_matches)?;
     Ok(h_matches)
 }
 
-fn present_report(dups: &Vec<Vec<Candidate>>) -> Result<(), std::io::Error>{
+fn present_report(dups: &Vec<Vec<Candidate>>) -> Result<(), std::io::Error> {
     for duplicates in dups {
         println!("Found duplicates:");
         for d in duplicates {
@@ -165,7 +158,6 @@ fn prompt_choices(choices: Vec<Choice>) -> Result<Action, std::io::Error> {
     Ok(choices[selection].action.clone())
 }
 
-
 fn handle_duplicates(duplicates: &Vec<Candidate>) -> Result<(), std::io::Error> {
     println!("Duplicate found!");
     for d in duplicates {
@@ -177,7 +169,7 @@ fn handle_duplicates(duplicates: &Vec<Candidate>) -> Result<(), std::io::Error> 
         label: "Ignore".to_string(),
         action: Action::Ignore,
     });
-    for c in duplicates{
+    for c in duplicates {
         choices.push(Choice {
             label: format!("Keep {:#?}", c.path),
             action: Action::Keep(c.path.clone()),
@@ -201,14 +193,14 @@ fn handle_duplicates(duplicates: &Vec<Candidate>) -> Result<(), std::io::Error> 
                 }
             }
             return Ok(());
-        },
+        }
         Action::DeleteAll => {
             for d in duplicates {
                 std::fs::remove_file(&d.path)?;
             }
             return Ok(());
-        },
-    }
+        }
+    };
 }
 
 fn prompt_delete_all(dups: &Vec<Vec<Candidate>>) -> Result<(), std::io::Error> {
@@ -227,29 +219,32 @@ fn main() -> Result<(), std::io::Error> {
         .arg(
             Arg::new("DIRECTORY")
                 .required(true)
-                .help("The directory to scan for duplicate files."))
+                .help("The directory to scan for duplicate files."),
+        )
         .arg(
             Arg::new("report")
                 .short('r')
                 .long("report")
                 .help("Report on duplicate files.")
-                .action(ArgAction::SetTrue))
+                .action(ArgAction::SetTrue),
+        )
         .arg(
             Arg::new("follow-symlinks")
                 .short('f')
                 .help("Follow symlinks when scanning (False by default).")
-                .action(ArgAction::SetTrue))
+                .action(ArgAction::SetTrue),
+        )
         .arg(
             Arg::new("autodelete")
                 .short('d')
                 .long("autodelete")
                 .help("Automatically delete duplicate files without prompting.")
-                .action(ArgAction::SetTrue))
+                .action(ArgAction::SetTrue),
+        )
         .get_matches();
 
     let dir = matches.get_one::<String>("DIRECTORY").unwrap();
     let duplicates = find_duplicates(dir.clone())?;
-
 
     if matches.get_flag("report") {
         present_report(&duplicates)?;
