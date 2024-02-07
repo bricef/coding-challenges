@@ -6,10 +6,10 @@ Implementation of the coding challenges from a variety of sources, for example h
 
 - [x] [Write Your Own `wc` Tool](./wc)
 - [x] [Write Your Own Compression Tool](./press)
+- [x] [File deduplicator](./deduplicator)
 
 ## In Progress
 
-- [ ] [File deduplicator](./deduplicator)
 - [ ] [Write Your Own Network Modelling Tool](./net-modeller/)
 
 ## Challenges
