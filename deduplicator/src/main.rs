@@ -4,7 +4,7 @@ use walkdir::WalkDir;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{self, PathBuf};
 use crc::{Crc, CRC_32_CKSUM};
 use xxhash_rust::xxh3::xxh3_64;
 use dialoguer::Select;
@@ -141,52 +141,80 @@ fn autodelete(dups: &Vec<Vec<Candidate>>) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-struct Action {
+#[derive(Clone)]
+enum Action {
+    Ignore,
+    Keep(PathBuf),
+    DeleteAll,
+}
+
+struct Choice {
     label: String,
-    action: Box<dyn FnOnce() -> Result<(), std::io::Error>>,
+    action: Action,
 }
 
-
-fn candidates_to_delete_choices(duplicates: Vec<Candidate>) -> Vec<Action> {
-    duplicates
-        .iter()
-        .map(|c| Action {
-            label: c.path.to_str().unwrap().to_string(),
-            action: Box::new(|| Ok(()) ),
-        })
-        .collect()
-}
-
-fn prompt_choices(_choices: Vec<Action>) -> Result<(), std::io::Error> {
-    let items = vec!["foo", "bar", "baz"];
+fn prompt_choices(choices: Vec<Choice>) -> Result<Action, std::io::Error> {
+    let items: Vec<String> = choices.iter().map(|a| a.label.clone()).collect();
 
     let selection = Select::new()
-        .with_prompt("What do you choose?")
+        .with_prompt("Choose an action")
         .items(&items)
         .interact()
         .unwrap();
 
-    println!("You chose: {}", items[selection]);
-    Ok(())
+    Ok(choices[selection].action.clone())
 }
 
-fn prompt_delete(dups: &Vec<Vec<Candidate>>) -> Result<(), std::io::Error> {
+
+fn handle_duplicates(duplicates: &Vec<Candidate>) -> Result<(), std::io::Error> {
+    println!("Duplicate found!");
+    for d in duplicates {
+        println!("   {}", d.path.to_str().unwrap());
+    }
+    // Set up choices...
+    let mut choices: Vec<Choice> = Vec::new();
+    choices.push(Choice {
+        label: "Ignore".to_string(),
+        action: Action::Ignore,
+    });
+    for c in duplicates{
+        choices.push(Choice {
+            label: format!("Keep {:#?}", c.path),
+            action: Action::Keep(c.path.clone()),
+        });
+    }
+    choices.push(Choice {
+        label: "Delete all duplicates".to_string(),
+        action: Action::DeleteAll,
+    });
+
+    // prompt user for choice
+    let chosen = prompt_choices(choices)?;
+
+    // Act on user choice
+    return match chosen {
+        Action::Ignore => Ok(()),
+        Action::Keep(path) => {
+            for d in duplicates {
+                if d.path != path {
+                    std::fs::remove_file(&d.path)?;
+                }
+            }
+            return Ok(());
+        },
+        Action::DeleteAll => {
+            for d in duplicates {
+                std::fs::remove_file(&d.path)?;
+            }
+            return Ok(());
+        },
+    }
+}
+
+fn prompt_delete_all(dups: &Vec<Vec<Candidate>>) -> Result<(), std::io::Error> {
     for duplicates in dups {
-        let local_dups = duplicates.clone();
-        let choices = vec![
-            Action {
-                label: "Ignore".to_string(),
-                action: Box::new(|| Ok(())),
-            },
-            Action {
-                label: "Keep one".to_string(),
-                action: Box::new(|| {
-                    let del_choices = candidates_to_delete_choices(local_dups);
-                    prompt_choices(del_choices)
-                }),
-            },
-        ];
-        let _action = prompt_choices(choices);
+        handle_duplicates(duplicates)?;
+        println!("");
     }
     Ok(())
 }
@@ -225,12 +253,15 @@ fn main() -> Result<(), std::io::Error> {
 
     if matches.get_flag("report") {
         present_report(&duplicates)?;
+        return Ok(());
     }
+
     if matches.get_flag("autodelete") {
         autodelete(&duplicates)?;
     } else {
-        prompt_delete(&duplicates)?;
+        prompt_delete_all(&duplicates)?;
     }
+
     if matches.get_flag("follow-symlinks") {
         todo!()
     }
