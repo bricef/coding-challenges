@@ -5,8 +5,8 @@ use std::time::Instant;
 use clap::Command;
 use clap::{Arg, ArgAction};
 
-use anyhow::Result;
-// use fantoccini::{ClientBuilder, Client, Locator};
+use anyhow::{Result, anyhow};
+use fantoccini::{ClientBuilder, Client, Locator};
 use headless_chrome::Browser;
 
 
@@ -23,14 +23,8 @@ struct Failure {
     reason: Reason,
 } 
 
-struct Location {
-    url: String,
-    line: u32,
-    column: u32,
-}
-
 struct Href{
-    location: Location,
+    source_page: String,
     url: String,
 }
 
@@ -45,6 +39,49 @@ struct Scanner {
     scanned: HashSet<String>
 }
 
+use url::{Url, ParseError};
+
+fn canonical (base : &Url, url: &str) -> Result<String, anyhow::Error> {
+    match Url::parse(url) {
+        Ok(parsed) => {
+            let scheme = parsed.scheme();
+            if !scheme.is_empty() && !scheme.starts_with("http") {
+                // println!("Invalid scheme for {}: {}", parsed.as_str(), parsed.scheme());
+                return Err(anyhow!("Invalid scheme for {}", parsed.as_str()));
+            }
+            let mut parsed = parsed;
+            parsed.set_fragment(None);
+            Ok(parsed.as_str().to_string())
+        },
+        Err(ParseError::RelativeUrlWithoutBase) => {
+            let mut parsed = base.join(url)?;
+            parsed.set_fragment(None);
+            Ok(parsed.as_str().to_string())
+        },
+        Err(e) => {
+            println!("Invalid URL: {}", e);
+            Err(anyhow!("Invalid URL: {}", e))
+        }
+    }
+}
+
+mod test{
+    use super::*;
+
+    #[test]
+    fn test_canonical() {
+        let base = Url::parse("http://example.com").unwrap();
+        let canon = move | url: &str | canonical(&base, url);
+
+        assert_eq!(canon("http://example.com").unwrap(), "http://example.com/");
+        assert_eq!(canon("https://example.com").unwrap(), "https://example.com/");
+        assert_eq!(canon("ftp://example.com").unwrap_err().to_string(), "Invalid scheme for ftp://example.com/");
+        assert_eq!(canon("/foo/bar").unwrap(), "http://example.com/foo/bar");
+    }
+
+}
+
+
 impl Scanner {
     async fn new(options: ScannerOptions) -> Result<Self, anyhow::Error> {
         
@@ -55,45 +92,30 @@ impl Scanner {
     }
 
     async fn hrefs(&mut self, url: String) -> Result<Vec<Href>, anyhow::Error> {
-        let browser = Browser::default()?;
+        let c = ClientBuilder::native().connect("http://localhost:4444").await.expect("failed to connect to WebDriver");
+        let mut hrefs: HashSet<String> = HashSet::new();
 
-        let tab = browser.new_tab()?;
-        // tab.set_default_timeout(std::time::Duration::from_secs(5));
+        c.goto(url.as_str()).await?;
+        
+        let refs =  c.find_all(Locator::Css("[href]")).await?;
 
-        // Navigate to wikipedia
-        tab.navigate_to("https://stackoverflow.com/questions/14248063/xpath-to-select-element-by-attribute-value")?;
-        tab.wait_until_navigated()?;
-        println!("Scanning elements...");
-        // tab.wait_for_element("div")?;
-        let start = Instant::now();
-        let es = tab.find_elements("[href]")?;
-        let duration = start.elapsed();
-        println!("Time elapsed in find_elements() is: {:?}", duration);
+        let here = Url::parse(&url)?;
+        let canonify = | url : &str | canonical(&here, url);
 
-        for e in es {
-            match e.get_attribute_value("href") {
-                Ok(href) => println!("{:?}", href),
-                Err(_) => println!("No href"),
+        for r in refs {
+            match r.attr("href").await {
+                Ok(Some(href)) => match canonify(&href) {
+                    Ok(canon) => drop(hrefs.insert(canon)),
+                    Err(_) => (), // Ignore bad URLs
+                },
+                Ok(None) => (), // Ignore no href
+                Err(_) => (), // Ignore no href
             }
         }
-        // let client = ClientBuilder::native().connect("http://localhost:9515").await?;
-        // client.goto(&url).await?;
-        // client
-        //     .wait()
-        //     .at_most(time::Duration::from_secs(5))
-        //     .for_element(Locator::Css(r"[href]")).await?;
-        // let elems = client.find_all(Locator::Css(r"[href]")).await?;
-        // for elem in elems {
-        //     if let Some(href) = elem.attr("href").await? {
-        //         self.scanned.insert(href.clone());
-                
-        //     }
-        // }
-        // for elem in self.scanned.iter() {
-        //     println!("{}", elem);
-        // }
-        // client.close().await?;
-        Ok(vec![])
+
+        c.close().await?;
+        let out = hrefs.into_iter().map(|h| Href{source_page: url.clone(), url: h}).collect();
+        Ok(out)
     }
 
     async fn scan(&mut self, url: String) -> Result<Vec<Failure>, anyhow::Error> {
@@ -105,28 +127,9 @@ impl Scanner {
 }
 
 
-
-// fn scan_links(url: String) -> Result<Vec<HRef>, std::io::Error> {
-
-//     let mut links = Vec::new();
-
-//     let client = reqwest::blocking::Client::new();
-//     let res = client.get(&url).send()?;
-
-//     let body = res.text()?;
-
-//     let document = Document::from(body.as_str());
-
-//     for node in document.find(Name("a")).filter_map(|n| n.attr("href")) {
-//         links.push(HRef::new(node.to_string()));
-//     }
-
-//     Ok(links)
-// }
-
-fn display_results(results: Vec<Failure>) {
+fn display_results(results: Vec<Href>) {
     for result in results {
-        println!("{}: {:#?}", result.url, result.reason);
+        println!("{}: {:#?}", result.source_page, result.url);
     }
 }
 
@@ -175,7 +178,7 @@ async fn main() -> Result<(), anyhow::Error>{
 
     let results = scanner.hrefs(url.clone()).await?; 
 
-    // display_results(results);
+    display_results(results);
 
     Ok(())
 

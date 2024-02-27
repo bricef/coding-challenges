@@ -166,6 +166,7 @@ dependencies = [
  "fantoccini",
  "headless_chrome",
  "tokio",
+ "url",
 ]
 
 [[package]]
