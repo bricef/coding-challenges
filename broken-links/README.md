@@ -13,11 +13,57 @@
 
 ## Todo
 
-- [ ] Scrape a single static page
+- [x] Scrape a single static page
 - [ ] Transitive scrape of links within domain
-- [ ] Run JS on page to get link
+- [x] Run JS on page to get link
 - [ ] Scan clickable elements, not just hyperlinks.
-- [ ] Multithread the code
+- [x] Multithread the code
+
+
+## Design 
+```rust
+//
+// Pseudocode for approach 
+//
+
+// Page queue for pages in site that need to be scrapped
+let mut pq = UniqQueue<Page>::new();
+
+// Link queue for links that need to be verified 
+let mut lq = UniqQueue<Link>::new();
+
+// Output Queue for worker results to be shared into.
+let mut oq = SyncSet<ScanResult>::new();
+
+// X page-workers with their own webdriver clients and webdriver instance
+let mut page_workers = Vec<PageWorker>::new();
+for _ in 0..npworkers {
+    page_workers.push(PageWorker::new(pq, lq, oq));
+}
+
+// X link-workers checking links for status code.
+let mut link_workers = Vec<LinkWorker>::new();
+for _ in 0..nlworkers {
+    link_worker.push(LinkWorker::new(lq, oq));
+}
+
+// Create a progress monitor to update the UI
+let progress_monitor = ProgressWorker::new(pg, lq, oq);
+
+// Initial URL(s) to scan are added to the work queue
+pq.push(Page{url: "https://some.url"})
+
+
+spawn!(progress_worker)
+spawn_all!(page_workers)
+spawn_all!(link_workers)
+
+join_all!(page_workers)
+join_all!(link_workers)
+
+//Post processing step to turn finsihed work queue into readable report
+display_results(oq)
+```
 
 ## Learnings
 
