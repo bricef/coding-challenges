@@ -1,23 +1,17 @@
-
-use core::time;
+use std::cmp;
 use std::collections::HashSet;
 
-use std::hash::Hash;
-use std::io::{Stdin, Write};
-use std::iter::Scan;
-use std::result;
+use std::io::Write;
+use std::sync::Arc;
 use std::time::Duration;
 use clap::Command;
 use clap::{Arg, ArgAction};
 
 use anyhow::{anyhow, Result};
-use failure::Fail;
 use fantoccini::{ClientBuilder, Locator};
-use crossbeam::channel::{Receiver, Sender, unbounded, RecvTimeoutError};
-use indicatif::{MultiProgress, ProgressBar, ProgressFinish, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use tokio::runtime;
-use tokio::task::JoinHandle;
-use url::form_urlencoded::parse;
+use tokio::sync::Mutex;
 use url::{Url, ParseError};
 
 #[derive(Debug)]
@@ -66,19 +60,14 @@ struct PageScannerOptions {
 }
 
 #[allow(dead_code)]
-struct PageScannerChannels {
-    page_input: Receiver<Page>,
-    page_output: Sender<Page>,
-    link_ouput: Sender<Link>,
-    result_output: Sender<ScanResult>,
-}
-
-#[allow(dead_code)]
 struct PageScanner {
+    pages: Arc<Mutex<Vec<Page>>>,
+    links: Arc<Mutex<Vec<Link>>>,
+    results: Arc<Mutex<Vec<ScanResult>>>,
     client: fantoccini::Client,
     options: PageScannerOptions,
     // scanned: HashSet<String>,
-    channels: PageScannerChannels,
+    // channels: PageScannerChannels,
 }
 
 type Page = Url;
@@ -132,40 +121,47 @@ impl PageScanner {
     //         dynamic: true,
     //     }).await
     // }
-    fn new(channels: PageScannerChannels, client: fantoccini::Client, options: PageScannerOptions) -> Result<Self, anyhow::Error> {   
+    fn new(pages: Arc<Mutex<Vec<Page>>>, links: Arc<Mutex<Vec<Link>>>, results: Arc<Mutex<Vec<ScanResult>>>, client: fantoccini::Client, options: PageScannerOptions) -> Result<Self, anyhow::Error> {   
         Ok(PageScanner {
-            channels,
+            pages,
+            links,
+            results,
             client,
             options,
         })
     }
 
-    async fn start(&mut self) -> Result<(), anyhow::Error> {
+    async fn start(&mut self) {
         // println!("Starting page scanner");
-        let timeout = 500;
+        let _timeout = 500;
         loop {
-            match self.channels.page_input.recv_timeout(Duration::from_millis(timeout)){
-                Ok(p) => {
+            let mut pages = self.pages.lock().await;
+            let next_page = pages.pop();
+            drop(pages);
+
+            match next_page {
+                Some(p) => {
                     let hrefs = self.page_to_hrefs(&p).await;
                     match hrefs {
                         Ok(hrefs) => {
-                            self.channels.result_output.send(ScanResult::PageSuccess(p.clone()))?;
+
+                            let mut results = self.results.lock().await;
+                            results.push(ScanResult::PageSuccess(p.clone()));
+                            drop(results);
+
                             for h in hrefs {
                                 // println!("Pushing link: {}", h.url.as_str());
-                                self.channels.link_ouput.send(Link { source: p.clone(), link: h.link.clone()})?;
+                                self.links.lock().await.push(h);
                             }
-                            // r_out.send(ScanResult::Failure(Failure{source: p.clone(), link: h.url.clone(), reason: Reason::Timeout(500)}))?;
                         },
                         Err(e) => {
-                            self.channels.result_output.send(ScanResult::PageFailure(PageFailure{page:p , reason: Reason::Other(e.to_string())}))?;
+                            self.results.lock().await.push(ScanResult::PageFailure(PageFailure{page:p , reason: Reason::Other(e.to_string())}));
                         }
                     }
                 },
-                Err(RecvTimeoutError::Timeout) => break, //{ println!("Timeout on pages"); break },
-                Err(RecvTimeoutError::Disconnected) => break, //{ println!("Disconnect on pages"); break },
+                None => tokio::time::sleep(Duration::from_millis(100)).await,
             }
         }
-        Ok(())
     }
 
     async fn page_to_hrefs(&mut self, url: &Page) -> Result<Vec<Link>, anyhow::Error> {
@@ -194,13 +190,13 @@ impl PageScanner {
 }
 
 struct LinkScanner {
-    input: Receiver<Link>,
-    output: Sender<ScanResult>,
+    input: Arc<Mutex<Vec<Link>>>,
+    output: Arc<Mutex<Vec<ScanResult>>>,
     timeout: u64,
     client: reqwest::Client,
 }
 impl LinkScanner {
-    fn new(input: Receiver<Link>, output: Sender<ScanResult>) -> Self {
+    fn new(input: Arc<Mutex<Vec<Link>>>, output: Arc<Mutex<Vec<ScanResult>>>) -> Self {
         LinkScanner {
             input,
             output,
@@ -208,62 +204,52 @@ impl LinkScanner {
             client: reqwest::Client::new(),
         }
     }
-    async fn start(&mut self, ) -> Result<(), anyhow::Error>{
+    async fn start(&mut self ){
         // println!("Starting link scanner");
         loop {
-            match self.input.recv_timeout(Duration::from_millis(self.timeout)) {
-                Ok(l) => {
+            let mut links = self.input.lock().await;
+            let next_link = links.pop();
+            drop(links);
+
+            match next_link {
+                Some(l) => {
                     // println!("Checking link: {}", l.link.as_str());
-                    self.check_link(l).await?
+                    self.check_link(l).await
                 },
-                Err(RecvTimeoutError::Timeout) => break, //{ println!("Timeout on links"); break },
-                Err(RecvTimeoutError::Disconnected) => break, //{ println!("Disconnect on links"); break },
-            
+                None => tokio::time::sleep(Duration::from_millis(100)).await, 
             }
         }
-        Ok(())
     }
-    async fn check_link(&mut self, l: Link) -> Result<(), anyhow::Error> {
+    async fn check_link(&mut self, l: Link){
         let res = self.client.head(l.link.as_str()).send().await;
         match res {
             Ok(res) => {
                 if res.status().is_success() {
-                    self.output.send(ScanResult::LinkSuccess(l))?;
+                    self.output.lock().await.push(ScanResult::LinkSuccess(l));
                 } else {
-                    self.output.send(ScanResult::LinkFailure(LinkFailure{link: l, reason: Reason::Code(res.status().as_u16())}))?;
+                    self.output.lock().await.push(ScanResult::LinkFailure(LinkFailure{link: l, reason: Reason::Code(res.status().as_u16())}));
                 }
             },
             Err(e) => {
-                self.output.send(ScanResult::LinkFailure(LinkFailure{link: l, reason: Reason::Other(e.to_string())}))?;
+                self.output.lock().await.push(ScanResult::LinkFailure(LinkFailure{link: l, reason: Reason::Other(e.to_string())}));
             }
         }
-        Ok(())
     }
 }
 
-struct ProgressUpdater{
-    page_send: Sender<Page>,
-    page_recv: Receiver<Page>,
-    link_send: Sender<Link>,
-    link_recv: Receiver<Link>,
-    results: Receiver<ScanResult>,
+struct Monitor{
+    pages: Arc<Mutex<Vec<Page>>>,
+    links: Arc<Mutex<Vec<Link>>>,
+    results: Arc<Mutex<Vec<ScanResult>>>,
 }
 
-impl ProgressUpdater {
+impl Monitor {
     fn new(
-        page_send: Sender<Page>,
-        page_recv: Receiver<Page>,
-        link_send: Sender<Link>,
-        link_recv: Receiver<Link>,
-        results: Receiver<ScanResult>,
+        pages: Arc<Mutex<Vec<Page>>>,
+        links: Arc<Mutex<Vec<Link>>>,
+        results: Arc<Mutex<Vec<ScanResult>>>,
     ) -> Self {
-        ProgressUpdater{
-            page_send,
-            page_recv,
-            link_send,
-            link_recv,
-            results,
-        }
+        Monitor{ pages, links, results }
     }
     async fn start(&mut self) {
         // println!("Starting updater");
@@ -294,12 +280,21 @@ impl ProgressUpdater {
         results_done.set_message("Results");
         results_done.enable_steady_tick(Duration::from_millis(100));
 
-        loop {
-            
+        let mut results_max = 0;
 
-            let pages_todo_count = self.page_send.len();
-            let links_todo_count = self.link_send.len();
-            let results_count = self.results.len();
+        loop {
+            let pages = self.pages.lock().await;
+            let links = self.links.lock().await;
+            let results = self.results.lock().await;
+
+            let pages_todo_count = pages.len();
+            let links_todo_count = links.len();
+            let results_count = results.len();
+
+            drop(pages);
+            drop(links);
+            drop(results);
+
             let total = pages_todo_count + links_todo_count + results_count;
 
             pages_todo.set_length(total as u64);
@@ -309,20 +304,28 @@ impl ProgressUpdater {
             links_todo.set_position(links_todo_count as u64);
 
             results_done.set_length(total as u64);
-            results_done.set_position(results_count as u64);
+            if results_count > results_max {
+                results_max = results_count;
+            }
+            results_done.set_position(cmp::max(results_max, results_count) as u64);
             
-            // if self.page_send.is_empty() && self.link_send.is_empty() && self.results.is_empty() {
-            //     break;
-            // } else {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            // }
-        }
-        println!("Ending updater");
+            tokio::time::sleep(Duration::from_millis(100)).await;
 
+            if pages_todo_count == 0 && links_todo_count == 0 && results_count != 0 {
+                break;
+            }
+        }
+
+        pages_todo.finish_and_clear();
+        links_todo.finish_and_clear();
+        results_done.finish_and_clear();
         m.clear().unwrap();
+        println!("Ending updater");
+        
     }
 }
 
+#[derive(Debug)]
 struct Report {
     ok_pages: u32,
     ok_links: u32,
@@ -330,26 +333,28 @@ struct Report {
     page_failures: Vec<PageFailure>,
 }
 
-async fn collect_results(results: Receiver<ScanResult>) -> Result<Report, anyhow::Error> {
+async fn collect_results(results: Arc<Mutex<Vec<ScanResult>>>) -> Result<Report, anyhow::Error> {
     let mut ok_pages = 0;
     let mut ok_links = 0;
     let mut link_failures = Vec::new();
     let mut page_failures = Vec::new();
+    let mut results = results.lock().await;
     loop{
-        match results.recv_timeout(Duration::from_millis(50)) {
-            Ok(r) => match r {
-                ScanResult::LinkSuccess(l) => ok_links += 1,
-                ScanResult::PageSuccess(p) => ok_pages += 1,
+        match results.pop(){
+            Some(r) => match r {
+                ScanResult::LinkSuccess(_l) => ok_links += 1,
+                ScanResult::PageSuccess(_p) => ok_pages += 1,
                 ScanResult::LinkFailure(f) => link_failures.push(f),
                 ScanResult::PageFailure(f) => page_failures.push(f),
             }
-            Err(_) => break,
+            None => break,
         }
     }
     return Ok(Report{ok_pages, ok_links, link_failures, page_failures});
 }
 
 fn present_results(report: Report) {
+    println!("Results {:?}", report);
     println!("OK Pages: {}", report.ok_pages);
     println!("OK Links: {}", report.ok_links);
     for f in report.link_failures {
@@ -359,6 +364,39 @@ fn present_results(report: Report) {
         println!("Page failure: {} due to {:?}", f.page, f.reason);
     }
 }
+
+async fn show_results(results: Arc<Mutex<Vec<ScanResult>>>) -> Result<(), anyhow::Error>{
+    let results = collect_results(results).await?;
+    present_results(results);            
+    println!("Done");
+    let _ = std::io::stdout().flush();
+    let _ = std::io::stderr().flush();
+    Ok(())
+
+}
+
+fn parse_target(url: &str) -> Result<Url, anyhow::Error> {
+    match Url::parse(url) {
+        Ok(parsed) => Ok(parsed),
+        Err(e) => Err(anyhow!("Invalid URL: {}", e)),
+    }
+}
+
+fn host_url_from(url: &Url) -> Result<Url, anyhow::Error> {
+    let mut host_url = url.clone();
+    host_url.set_fragment(None);
+    host_url.set_query(None);
+    host_url.set_path("");
+    Ok(host_url)
+}
+
+fn build_browser_capabilities() -> fantoccini::wd::Capabilities{
+    let mut capabilities = serde_json::map::Map::new();
+    let browser_options = serde_json::json!({ "args": ["--headless"] });
+    capabilities.insert("moz:firefoxOptions".to_string(), browser_options.clone());
+    return capabilities;
+}
+
 
 fn main() -> Result<(), anyhow::Error>{
     let matches = Command::new("blf")
@@ -394,46 +432,33 @@ fn main() -> Result<(), anyhow::Error>{
         .get_matches();
 
 
-    let url = matches.get_one::<String>("URL").unwrap();
-    let parsed_url = Url::parse(url.as_str())?;
+    let parsed_url = parse_target(matches.get_one::<String>("URL").unwrap())?;
+    let host_url = host_url_from(&parsed_url)?;
 
-    
+    // Set permitted scan hosts 
+    let mut permitted_hosts = HashSet::new();
+    permitted_hosts.insert(host_url);
 
     let rt = runtime::Runtime::new()?; // multithreaded runtime
 
-    let (p_s,p_r) = unbounded::<Page>();
-    let (l_s,l_r) = unbounded::<Link>();
-    let (r_s,r_r) = unbounded::<ScanResult>();
+    let pages = Arc::new(Mutex::new(Vec::<Page>::new()));
+    let links = Arc::new(Mutex::new(Vec::<Link>::new()));
+    let results = Arc::new(Mutex::new(Vec::<ScanResult>::new()));
 
     
 
     rt.block_on(async move {
 
-        let mut capabilities = serde_json::map::Map::new();
-        let browser_options = serde_json::json!({ "args": ["--headless"] });
-        capabilities.insert("moz:firefoxOptions".to_string(), browser_options.clone());
-
         let web_driver_client = ClientBuilder::native()
-            .capabilities(capabilities)
+            .capabilities(build_browser_capabilities())
             .connect("http://localhost:4444")
             .await
             .expect("failed to connect to WebDriver"); 
-        
-        let mut host_url = parsed_url.clone();
-        host_url.set_fragment(None);
-        host_url.set_query(None);
-        host_url.set_path("");
-
-        let mut permitted_hosts = HashSet::new();
-        permitted_hosts.insert(host_url);
 
         let mut page_scanner = PageScanner::new(
-            PageScannerChannels{
-                page_input: p_r.clone(),
-                page_output: p_s.clone(), 
-                link_ouput: l_s.clone(),
-                result_output: r_s.clone(),
-            },
+            pages.clone(),
+            links.clone(),
+            results.clone(),
             web_driver_client,
             PageScannerOptions {
                 scope: permitted_hosts,
@@ -444,12 +469,15 @@ fn main() -> Result<(), anyhow::Error>{
         )?;
 
         // hydrate work queue with initial url
-        p_s.send(parsed_url.clone())?;
+        {
+            pages.lock().await.push(parsed_url.clone());
+        }
 
         let mut set = tokio::task::JoinSet::new();
 
-        // let mut progress_updater = ProgressUpdater::new(p_s.clone(), p_r.clone(), l_s.clone(), l_r.clone(), r_r.clone());
-        // let ph = tokio::spawn( async move { progress_updater.start().await; }) ; 
+        let mut monitor = Monitor::new(pages.clone(), links.clone(), results.clone());
+        
+        let jh = tokio::spawn( async move { monitor.start().await; }) ; 
 
         // Set up the page scanner worker
         set.spawn(async move {
@@ -459,24 +487,25 @@ fn main() -> Result<(), anyhow::Error>{
 
         // Set up the link scanner workers
         for _ in 0..8 {
-            let mut link_scanner = LinkScanner::new(l_r.clone(), r_s.clone());
+            let mut link_scanner = LinkScanner::new(links.clone(), results.clone());
             set.spawn(async move { 
                 let _ = link_scanner.start().await; 
+                drop(link_scanner);
             });
         }
 
         // Wait for all tasks
-        while let Some(_) = set.join_next().await {
-            ()
-        }
+        // while let Some(_) = set.join_next().await {
+        //     ()
+        // }
 
-        let results = collect_results(r_r).await?;
-        present_results(results);            
-        println!("Done");
-        // let _ = std::io::stdout().flush();
-        // let _ = std::io::stderr().flush();
-        // tokio::join!(ph);
-        // ph.abort();
+        tokio::join!(jh);
+
+        // tokio::join!(jh);
+        show_results(results.clone()).await?;
+        
+        // TODO: Page scanner should close the webdriver client!
+        
         Ok(())
     })
 
