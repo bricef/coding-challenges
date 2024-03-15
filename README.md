@@ -11,11 +11,12 @@ Implementation of the coding challenges from a variety of sources, for example h
 
 ## In Progress
 
+- [ ] [Noise generator library (White, brown, blue, pink, 1D, 2D, 3D, ND noise)](./noise/)
 - [ ] [Write Your Own Network Modelling Tool](./net-modeller/)
 
 ## Challenges
 
-- [ ] Noise generator library (White, brown, blue, pink, 1D, 2D, 3D, ND noise)
+
 - [ ] Write Your Own JSON Parser
 - [ ] Write Your Own `cut` Tool
 - [ ] Write Your Own Load Balancer
