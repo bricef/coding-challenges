@@ -21,8 +21,10 @@ Options:
 ```
 
 ## Enhancements
+- [ ] Extract worker setup into dedicated library.
+- [ ] Separate scanenrs into tehir own modules.
 - [ ] Scan clickable elements, not just hyperlinks.
-- [ ] Show xpath of element which has broken link.
+- [ ] Show xpath of elements which have broken links.
 
 ## Todo
 
