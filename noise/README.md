@@ -10,8 +10,8 @@ The noise utility generates coloured random noise in arbitrary dimensions.
 
 - [ ] Parameterised distribution functions
 - [ ] 1D white noise
-- [ ] Spectral graph
 - [ ] FFT of white noise
+- [ ] Spectral graph & Spectogram
 - [ ] Coloured noise functions
 - [ ] 2D Noise
 - [ ] nD Noise
@@ -44,3 +44,7 @@ in the development process, and probably precede the actual data generation.
 
 - [Compute::distributions](https://docs.rs/compute/latest/compute/distributions/) for probabilty distribitions 
 - [rustfft crate](https://docs.rs/rustfft/latest/rustfft/) for transforming colors of noise.
+- [Spectral Density](https://en.wikipedia.org/wiki/Spectral_density)
+- [Colors of Noise](https://en.wikipedia.org/wiki/Colors_of_noise)
+- [Spectogram](https://en.wikipedia.org/wiki/Spectrogram)
+- [Plotters plotting library](https://github.com/plotters-rs/plotters)
