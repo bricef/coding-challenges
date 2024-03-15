@@ -1,12 +1,13 @@
 use std::cmp;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+
 use clap::Command;
 use clap::{Arg, ArgAction};
-
 use anyhow::{anyhow, Result};
 use fantoccini::{ClientBuilder, Locator};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
@@ -14,14 +15,33 @@ use tokio::runtime;
 use tokio::sync::Mutex;
 use url::{Url, ParseError};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Hash)]
 enum Reason {
     Code(u16),
-    Timeout(u32),
-    DNS(String),
-    SSL(String),
+    // Timeout(u32),
+    // DNS(String),
+    // SSL(String),
     Other(String)
 } 
+
+impl Eq for Reason {}
+
+impl PartialEq for Reason {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Reason::Code(a), Reason::Code(b)) => a == b,
+            // (Reason::Timeout(a), Reason::Timeout(b)) => true,
+            // (Reason::DNS(a), Reason::DNS(b)) => a == b,
+            // (Reason::SSL(a), Reason::SSL(b)) => a == b,
+            (Reason::Other(a), Reason::Other(b)) => a == b,
+            _ => false,
+        }
+    }
+
+}
+
+
+
 
 #[derive(Debug)]
 struct LinkFailure {
@@ -55,20 +75,12 @@ struct Link{
 struct PageScannerOptions {
     scope: HashSet<Url>,
     follow: bool,
-    clickable: bool,
-    dynamic: bool,
+    // clickable: bool,
+    // dynamic: bool,
 }
 
 #[allow(dead_code)]
-struct PageScanner {
-    pages: Arc<Mutex<Vec<Page>>>,
-    links: Arc<Mutex<Vec<Link>>>,
-    results: Arc<Mutex<Vec<ScanResult>>>,
-    client: fantoccini::Client,
-    options: PageScannerOptions,
-    // scanned: HashSet<String>,
-    // channels: PageScannerChannels,
-}
+
 
 type Page = Url;
 
@@ -96,6 +108,7 @@ fn canonical (base : &Url, url: &str) -> Result<Url, anyhow::Error> {
     }
 }
 
+
 mod test{
     #[allow(unused_imports)]
     use super::*;
@@ -112,6 +125,17 @@ mod test{
     }
 
 }
+struct PageScanner {
+    seen: HashSet<Url>,
+    pages: Arc<Mutex<Vec<Page>>>,
+    links: Arc<Mutex<Vec<Link>>>,
+    results: Arc<Mutex<Vec<ScanResult>>>,
+    client: Arc<fantoccini::Client>,
+    options: PageScannerOptions,
+    exit: Arc<AtomicBool>,
+    // scanned: HashSet<String>,
+    // channels: PageScannerChannels,
+}
 
 impl PageScanner {
     // async fn default() -> Result<Self, anyhow::Error> {
@@ -121,19 +145,28 @@ impl PageScanner {
     //         dynamic: true,
     //     }).await
     // }
-    fn new(pages: Arc<Mutex<Vec<Page>>>, links: Arc<Mutex<Vec<Link>>>, results: Arc<Mutex<Vec<ScanResult>>>, client: fantoccini::Client, options: PageScannerOptions) -> Result<Self, anyhow::Error> {   
+    fn new(
+        pages: Arc<Mutex<Vec<Page>>>, 
+        links: Arc<Mutex<Vec<Link>>>, 
+        results: Arc<Mutex<Vec<ScanResult>>>, 
+        client: Arc<fantoccini::Client>, 
+        options: PageScannerOptions,
+        exit: Arc<AtomicBool>
+    ) -> Result<Self, anyhow::Error> {   
         Ok(PageScanner {
+            seen: HashSet::new(),
             pages,
             links,
             results,
             client,
             options,
+            exit
         })
     }
 
-    async fn start(&mut self) {
+    async fn start(&mut self) -> Result<(), anyhow::Error>{
         // println!("Starting page scanner");
-        let _timeout = 500;
+        
         loop {
             let mut pages = self.pages.lock().await;
             let next_page = pages.pop();
@@ -141,17 +174,35 @@ impl PageScanner {
 
             match next_page {
                 Some(p) => {
+                    // Ignore already scanned pages
+                    if self.seen.contains(&p) {
+                        continue;
+                    }
+                    // We haven't scanned this one before. 
+                    // Add it to the list of seen pages
+                    self.seen.insert(p.clone());
+                    
+                    // Scan the page
                     let hrefs = self.page_to_hrefs(&p).await;
+                    
+                    // Process the results
                     match hrefs {
                         Ok(hrefs) => {
 
                             let mut results = self.results.lock().await;
                             results.push(ScanResult::PageSuccess(p.clone()));
                             drop(results);
+                            
 
                             for h in hrefs {
-                                // println!("Pushing link: {}", h.url.as_str());
-                                self.links.lock().await.push(h);
+                                let host = host_url_from(&h.link)?;
+                                if self.options.scope.contains(&host) && self.options.follow { 
+                                    // Same domain
+                                    self.pages.lock().await.push(h.link);
+                                } else { 
+                                    // external link
+                                    self.links.lock().await.push(h);
+                                }
                             }
                         },
                         Err(e) => {
@@ -161,20 +212,38 @@ impl PageScanner {
                 },
                 None => tokio::time::sleep(Duration::from_millis(100)).await,
             }
-        }
+            if self.exit.load(Ordering::Relaxed) {
+                break;
+            }
+        }   
+        // println!("Ending page scanner");
+        Ok(())
     }
 
     async fn page_to_hrefs(&mut self, url: &Page) -> Result<Vec<Link>, anyhow::Error> {
         let mut hrefs: HashSet<Url> = HashSet::new();
 
         self.client.goto(url.as_str()).await?;
-        
-        let refs =  self.client.find_all(Locator::Css("[href]")).await?;
 
         let canonify = | fragment : &str | canonical(url, fragment);
-
+        
+        // search for hrefs
+        let refs =  self.client.find_all(Locator::Css("[href]")).await?;
         for r in refs {
             match r.attr("href").await {
+                Ok(Some(href)) => match canonify(&href) {
+                    Ok(canon) => drop(hrefs.insert(canon)),
+                    Err(_) => (), // Ignore bad URLs
+                },
+                Ok(None) => (), // Ignore no href
+                Err(_) => (), // Ignore no href
+            }
+        }
+
+        // search for sources
+        let srcs= self.client.find_all(Locator::Css("[src]")).await?;
+        for r in srcs {
+            match r.attr("src").await {
                 Ok(Some(href)) => match canonify(&href) {
                     Ok(canon) => drop(hrefs.insert(canon)),
                     Err(_) => (), // Ignore bad URLs
@@ -192,16 +261,16 @@ impl PageScanner {
 struct LinkScanner {
     input: Arc<Mutex<Vec<Link>>>,
     output: Arc<Mutex<Vec<ScanResult>>>,
-    timeout: u64,
     client: reqwest::Client,
+    exit: Arc<AtomicBool>,
 }
 impl LinkScanner {
-    fn new(input: Arc<Mutex<Vec<Link>>>, output: Arc<Mutex<Vec<ScanResult>>>) -> Self {
+    fn new(input: Arc<Mutex<Vec<Link>>>, output: Arc<Mutex<Vec<ScanResult>>>, exit: Arc<AtomicBool>) -> Self {
         LinkScanner {
             input,
             output,
-            timeout: 2000,
             client: reqwest::Client::new(),
+            exit,
         }
     }
     async fn start(&mut self ){
@@ -218,7 +287,11 @@ impl LinkScanner {
                 },
                 None => tokio::time::sleep(Duration::from_millis(100)).await, 
             }
+            if self.exit.load(Ordering::Relaxed) {
+                break;
+            }
         }
+        // println!("Ending link scanner");
     }
     async fn check_link(&mut self, l: Link){
         let res = self.client.head(l.link.as_str()).send().await;
@@ -251,7 +324,7 @@ impl Monitor {
     ) -> Self {
         Monitor{ pages, links, results }
     }
-    async fn start(&mut self) {
+    async fn start(&mut self){
         // println!("Starting updater");
         let m = MultiProgress::new();
         let sty = ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7} {msg}")
@@ -320,7 +393,7 @@ impl Monitor {
         links_todo.finish_and_clear();
         results_done.finish_and_clear();
         m.clear().unwrap();
-        println!("Ending updater");
+        // println!("Ending updater");
         
     }
 }
@@ -354,12 +427,25 @@ async fn collect_results(results: Arc<Mutex<Vec<ScanResult>>>) -> Result<Report,
 }
 
 fn present_results(report: Report) {
-    println!("Results {:?}", report);
+    // println!("Results {:?}", report);
     println!("OK Pages: {}", report.ok_pages);
     println!("OK Links: {}", report.ok_links);
-    for f in report.link_failures {
-        println!("Link failure: {} -> {} due to {:?}", f.link.source, f.link.link, f.reason);
+
+    let mut map: HashMap::<Reason, Vec<LinkFailure>> = HashMap::new();
+
+    for failure in report.link_failures.into_iter(){
+        let group = map.entry(failure.reason.clone()).or_insert(Vec::new());
+        group.push(failure);
     }
+    
+    for (key, group) in map.into_iter(){
+        println!("Link failures due to {:?}:", key);
+        for f in group {
+            println!("\t{} -> {} ", f.link.source, f.link.link );
+        }
+    }
+
+    
     for f in report.page_failures{
         println!("Page failure: {} due to {:?}", f.page, f.reason);
     }
@@ -394,6 +480,8 @@ fn build_browser_capabilities() -> fantoccini::wd::Capabilities{
     let mut capabilities = serde_json::map::Map::new();
     let browser_options = serde_json::json!({ "args": ["--headless"] });
     capabilities.insert("moz:firefoxOptions".to_string(), browser_options.clone());
+    // capabilities.insert("browserName".to_string(), serde_json::json!("Firefox"));
+    // capabilities.insert("browserVersion".to_string(), serde_json::json!("105"));
     return capabilities;
 }
 
@@ -408,13 +496,13 @@ fn main() -> Result<(), anyhow::Error>{
                 .required(true)
                 .help("The URL to scan."),
         )
-        .arg(
-            Arg::new("dynamic")
-                .short('d')
-                .long("dynamic")
-                .help("Run scripts on loaded page (False by default).")
-                .action(ArgAction::SetTrue),
-        )
+        // .arg(
+        //     Arg::new("dynamic")
+        //         .short('d')
+        //         .long("dynamic")
+        //         .help("Run scripts on loaded page (False by default).")
+        //         .action(ArgAction::SetTrue),
+        // )
         .arg(
             Arg::new("follow")
                 .short('f')
@@ -422,13 +510,13 @@ fn main() -> Result<(), anyhow::Error>{
                 .help("Follow links and perform analysis on all pages in subdomain. (False by default).")
                 .action(ArgAction::SetTrue),
         )
-        .arg(
-            Arg::new("clickable")
-                .short('c')
-                .long("clickable")
-                .help("Scan for all elements that react to clicks, not juts hyperlinks. (False by default).")
-                .action(ArgAction::SetTrue),
-        )
+        // .arg(
+        //     Arg::new("clickable")
+        //         .short('c')
+        //         .long("clickable")
+        //         .help("Scan for all elements that react to clicks, not juts hyperlinks. (False by default).")
+        //         .action(ArgAction::SetTrue),
+        // )
         .get_matches();
 
 
@@ -445,31 +533,35 @@ fn main() -> Result<(), anyhow::Error>{
     let links = Arc::new(Mutex::new(Vec::<Link>::new()));
     let results = Arc::new(Mutex::new(Vec::<ScanResult>::new()));
 
+    let exit = Arc::new(AtomicBool::new(false));
     
 
     rt.block_on(async move {
 
-        let web_driver_client = ClientBuilder::native()
-            .capabilities(build_browser_capabilities())
-            .connect("http://localhost:4444")
-            .await
-            .expect("failed to connect to WebDriver"); 
+        let client = Arc::new(
+            ClientBuilder::native()
+                .capabilities(build_browser_capabilities())
+                .connect("http://localhost:4444")
+                .await?
+        );
 
         let mut page_scanner = PageScanner::new(
             pages.clone(),
             links.clone(),
             results.clone(),
-            web_driver_client,
+            client.clone(),
             PageScannerOptions {
                 scope: permitted_hosts,
                 follow: matches.get_flag("follow"),
-                clickable: matches.get_flag("clickable"),
-                dynamic: matches.get_flag("dynamic"),
+                // clickable: matches.get_flag("clickable"),
+                // dynamic: matches.get_flag("dynamic"),
             },
+            exit.clone()
         )?;
 
         // hydrate work queue with initial url
         {
+            // println!("Seeding page requests");
             pages.lock().await.push(parsed_url.clone());
         }
 
@@ -477,7 +569,9 @@ fn main() -> Result<(), anyhow::Error>{
 
         let mut monitor = Monitor::new(pages.clone(), links.clone(), results.clone());
         
-        let jh = tokio::spawn( async move { monitor.start().await; }) ; 
+        let jh = tokio::spawn( async move { 
+            monitor.start().await; 
+        }) ; 
 
         // Set up the page scanner worker
         set.spawn(async move {
@@ -487,24 +581,28 @@ fn main() -> Result<(), anyhow::Error>{
 
         // Set up the link scanner workers
         for _ in 0..8 {
-            let mut link_scanner = LinkScanner::new(links.clone(), results.clone());
+            let mut link_scanner = LinkScanner::new(links.clone(), results.clone(), exit.clone());
             set.spawn(async move { 
-                let _ = link_scanner.start().await; 
+                link_scanner.start().await; 
                 drop(link_scanner);
             });
         }
-
-        // Wait for all tasks
-        // while let Some(_) = set.join_next().await {
-        //     ()
-        // }
-
-        tokio::join!(jh);
-
-        // tokio::join!(jh);
-        show_results(results.clone()).await?;
         
-        // TODO: Page scanner should close the webdriver client!
+        let _ = tokio::join!(jh);
+        // println!("Closing workers");
+        exit.store(true, Ordering::Relaxed);
+
+        // Wait for all workers to finish
+        while let Some(_) = set.join_next().await {}
+        
+        show_results(results.clone()).await?;
+
+        println!("Closing client");
+        if let Some(client) = Arc::into_inner(client) {
+            client.close().await?;
+        }else {
+            eprintln!("WARNING: Failed to close client");
+        }
         
         Ok(())
     })
