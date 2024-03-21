@@ -1,4 +1,4 @@
-# `noise` Rust noise generator
+# `noise` noise generator
 
 ## About
 
@@ -15,6 +15,11 @@ The noise utility generates coloured random noise in arbitrary dimensions.
 - [ ] Coloured noise functions
 - [ ] 2D Noise
 - [ ] nD Noise
+- [ ] Point distributions in nD
+- [ ] Perlin Noise
+- [ ] Opensimplex Noise
+- [ ] Fractal noise
+- [ ] Noise additions
 
 ## Learnings
 
