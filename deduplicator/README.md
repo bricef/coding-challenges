@@ -24,6 +24,7 @@ Options:
 - [ ] Fuzzy matching mode using edit distance between files.
 - [ ] Prompt with numbers to speed up option selection
 - [ ] Check on delete
+- [x] List all empty files
 - [x] Deduplicate code for match checking
 - [x] Implement symlink following
 

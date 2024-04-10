@@ -82,6 +82,19 @@ fn present_report(dups: &Vec<Vec<PathBuf>>) -> Result<(), std::io::Error> {
     Ok(())
 }
 
+fn list_empty(walker: WalkDir) -> Result<(), std::io::Error> {
+    for entry in walker {
+        let entry = entry?;
+        if entry.file_type().is_file() {
+            let meta = std::fs::metadata(entry.path())?;
+            if meta.len() == 0 {
+                println!("{}", entry.path().to_str().unwrap());
+            }
+        }
+    }
+    Ok(())
+}
+
 fn autodelete(dups: &Vec<Vec<PathBuf>>) -> Result<(), std::io::Error> {
     for duplicates in dups {
         let mut iter = duplicates.iter();
@@ -201,6 +214,12 @@ fn main() -> Result<(), std::io::Error> {
                 .help("Automatically delete duplicate files without prompting.")
                 .action(ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("empty")
+                .long("empty")
+                .help("List empty files within target directory.")
+                .action(ArgAction::SetTrue)
+        )
         .get_matches();
 
     let dir = matches.get_one::<String>("DIRECTORY").unwrap();
@@ -209,6 +228,11 @@ fn main() -> Result<(), std::io::Error> {
         true => WalkDir::new(dir.clone()),
         false => WalkDir::new(dir.clone()).follow_links(false),
     };
+
+    if matches.get_flag("empty") {
+        list_empty(walker)?;
+        return Ok(());
+    }
 
     let duplicates = find_duplicates(walker)?;
 
