@@ -8,6 +8,7 @@ Implementation of the coding challenges from a variety of sources, for example h
 - [x] [Write Your Own Compression Tool](./press)
 - [x] [File deduplicator](./deduplicator)
 - [x] [Broken link finder](./broken-links)
+- [x] [Large File handling](./large-files/)
 
 ## In Progress
 
