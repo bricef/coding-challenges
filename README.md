@@ -17,6 +17,9 @@ Implementation of the coding challenges from a variety of sources, for example h
 - [ ] [Noise generator library (White, brown, blue, pink, 1D, 2D, 3D, ND noise)](./noise/)
 - [ ] [Write Your Own Network Modelling Tool](./net-modeller/)
 - [ ] [Haskell Scheme Interpreter](./hascheme/) 
+- [ ] [Lisp interpreter for the DCPU16](./dcpu16-lisp/)
+- [ ] [Web implementation of the TECS toolchain](./WebTECS/)
+- [ ] [Brix - A Typescript toy VM and compilation toolchain](./brix-vm/)
 
 ## Ideas
 See also [Build-your-own-X](https://github.com/codecrafters-io/build-your-own-x) repository.

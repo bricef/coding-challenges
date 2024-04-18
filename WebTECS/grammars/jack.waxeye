@@ -1,0 +1,79 @@
+Program <- *ws +Class
+
+Class <- :'class' +ws Identifier *ws :'{' *ws *ClassVarDec *SubroutineDec :'}' *ws
+
+ClassVarDec <- ('static' | 'field') +ws Type +ws VarName *(:',' *ws VarName) :';' *ws
+
+Type <- 'int' | 'char' | 'boolean' | ClassName
+
+VarName <- Identifier *ws
+
+ClassName <- Identifier
+
+Identifier  <- [a-zA-Z_] *[a-zA-Z0-9_]
+
+SubroutineDec <- FunctionType +ws 
+				 ReturnType +ws 
+				 SubroutineName *ws 
+				 :'(' *ws ParameterList :')' *ws 
+				 SubroutineBody 
+
+FunctionType <- ('constructor' | 'function' | 'method')
+ReturnType <- ('void' | Type)
+
+SubroutineBody <- :'{' *ws VarDecs Statements :'}' *ws
+
+VarDecs <- *VarDec
+
+VarDec <- :'var' +ws Type +ws VarName *(:',' *ws VarName) :';' *ws
+
+ParameterList <- ?( Type +ws VarName *(:',' *ws Type *ws VarName ) )
+
+Statements <- *Statement
+
+Statement <- LetStatement | IfStatement | WhileStatement | DoStatement | ReturnStatement 
+
+
+IfStatement <- :'if' *ws :'(' *ws Expression :')' *ws :'{' *ws Statements :'}' *ws ?('else' *ws :'{' *ws Statements :'}' *ws)
+WhileStatement <- :'while' *ws :'(' *ws Expression :')' *ws :'{' *ws Statements :'}' *ws
+DoStatement <- :'do' +ws SubroutineCall :';' *ws
+ReturnStatement <- :'return' *ws ?Expression :';' *ws
+
+SubroutineCall <- ?( ( ClassName | VarName ) :'.') SubroutineName :'(' *ws ExpressionList :')' *ws
+
+LetStatement <- :'let' +ws VarName *ws ?(:'[' *ws Expression :']') *ws :'=' *ws Expression :';' *ws
+
+ExpressionList <- ?(Expression *(:',' *ws Expression) ) *ws
+
+Expression <- Term *(Op *ws Term)
+
+Term <-  SubroutineCall
+		| IntegerConstant *ws
+		| StringConstant *ws
+		| KeywordConstant *ws
+		| VarName *ws
+		| ( VarName *ws '[' *ws Expression ']' *ws ) 
+		| :'(' *ws Expression :')' *ws
+		| UnaryOp *ws Term *ws
+
+SubroutineName <- Identifier
+
+Op <- '+'|'-'|'*'|'/'|'&'|'|'|'<'|'>'|'='
+
+UnaryOp <- '-'|'~'
+
+KeywordConstant <- 'true'|'false'|'null'|'this'
+
+IntegerConstant <- +[0-9]
+
+StringConstant <- :'"' *(!["] .) :'"'
+
+#
+# Voided
+#
+
+Comment <: *[ \t] '//' *(![\r\n] .)
+
+MLComment <: *[ \t] '/*' *( !'*/' .) '*/'
+
+ws <: MLComment | Comment | +[ \t\r\n]

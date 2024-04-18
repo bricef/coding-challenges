@@ -1,0 +1,44 @@
+
+Program <- * ( Statement | Comment | MLComment | *( ws | Newline ) )
+
+Statement <- *ws ( Push | Pop | Label | Goto | IfGoto | Function | Return | Operator ) ( (*ws Newline)  | Comment) 
+
+Push <- :"push" +ws Segment +ws Index
+
+Pop <- :"pop" +ws Segment +ws Index
+
+Segment <- "argument" | "local" | "static" | "constant" | "this" | "that" | "pointer" | "temp"
+
+Operator <- "add" | "sub" | "neg" | "eq" | "gt" | "lt" | "and" | "or" | "not"
+
+Label <- :"label" +ws Symbol
+
+Goto <- :"goto" +ws Symbol
+
+IfGoto <- :"if-goto" +ws Symbol
+
+Function <- :"function" +ws FunctionName +ws Locals
+
+Return <- :"return"
+
+FunctionName <- [a-zA-Z] *[a-z_$#@.-]
+
+Symbol <- [a-zA-Z] *[a-z_$#@.-]
+
+Index <- Number
+
+Locals <- Number
+
+Number <- +[0-9]
+
+#
+# Voided
+#
+
+Comment <: *ws '//' *. Newline
+
+MLComment <: '/*' (!'*/') '*/'
+
+ws <: [ \t] | MLComment
+
+Newline   <: '\r\n' | '\n' | '\r'

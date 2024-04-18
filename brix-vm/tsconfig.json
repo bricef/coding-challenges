@@ -1,0 +1,15 @@
+{
+  "exclude":[
+    "**/*.spec.ts"
+  ],
+  "compilerOptions": {
+    /* Visit https://aka.ms/tsconfig.json to read more about this file */
+    "target": "es6",
+    "rootDir": "./src/",
+    "outFile": "./dist/brix.js",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,                                      /* Enable all strict type-checking options. */
+    "skipLibCheck": true                                 /* Skip type checking all .d.ts files. */
+  }
+}

@@ -1,0 +1,34 @@
+;
+; RC4 Implementation in DCPU16
+; 
+; @fractallambda 
+; https://github.com/bricef/
+;
+
+
+
+; for i from 0 to 255
+;     S[i] := i
+; endfor
+
+
+
+
+; j := 0
+; for i from 0 to 255
+;     j := (j + S[i] + key[i mod keylength]) mod 256
+;     swap values of S[i] and S[j]
+; endfor
+
+; i := 0
+; j := 0
+; while GeneratingOutput:
+;     i := (i + 1) mod 256
+;     j := (j + S[i]) mod 256
+;     swap values of S[i] and S[j]
+;     K := S[(S[i] + S[j]) mod 256]
+;     output K
+; endwhile
+
+:key        DAT "Key", 0x00
+:plaintext  DAT "Plaintext", 0x00
