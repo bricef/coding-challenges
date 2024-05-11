@@ -1,0 +1,29 @@
+{
+  "name": "mdlocal",
+  "version": "0.0.1",
+  "description": "A markdown file image localiser",
+  "main": "index.js",
+  "type": "module",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Brice Fernandes",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.0.0",
+    "fs-extra": "^11.2.0",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.0",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "unified": "^11.0.4",
+    "unist-util-visit": "^5.0.0"
+  },
+  "devDependencies": {
+    "nexe": "^1.1.6",
+    "postject": "^1.0.0-alpha.6"
+  }
+}
