@@ -18,3 +18,6 @@ Options:
   -o, --output <outputpath>  Output path (default: "stdout")
   -h, --help                 display help for command
 ```
+## Todo
+
+- [ ] build into standalone binary
