@@ -2,18 +2,18 @@
 
 Implementation of the coding challenges from a variety of sources, for example https://codingchallenges.fyi
 
-## Completed 
+## Completed
 
 - [x] [Write Your Own `wc` Tool](./wc)
 - [x] [Write Your Own Compression Tool](./press)
 - [x] [File deduplicator](./deduplicator)
 - [x] [Broken link finder](./broken-links)
 - [x] [Large File handling](./large-files/)
+- [x] [Markdown localiser (In JS)](./mdlocaljs)
 
 ## In Progress
 
-
-- [ ] [Markdown localiser](./mdlocal)
+- [ ] [Markdown localiser (In Rust)](./mdlocal)
 - [ ] [Noise generator library (White, brown, blue, pink, 1D, 2D, 3D, ND noise)](./noise/)
 - [ ] [Write Your Own Network Modelling Tool](./net-modeller/)
 - [ ] [Haskell Scheme Interpreter](./hascheme/) 
@@ -22,6 +22,7 @@ Implementation of the coding challenges from a variety of sources, for example h
 - [ ] [Brix - A Typescript toy VM and compilation toolchain](./brix-vm/)
 
 ## Ideas
+
 See also [Build-your-own-X](https://github.com/codecrafters-io/build-your-own-x) repository.
 
 - [ ] Build Your Own Redis
