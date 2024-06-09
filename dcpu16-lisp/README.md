@@ -40,31 +40,31 @@ Accept other languages above the toolchain.
 Tools:
 ------
 
-###tokenize.py
+### tokenize.py
 **[future]** Takes a program in an other language and tokenises it (token stream is long list of s-exprs) 
 
-###astify.py
+### astify.py
 **[future]** Turns a token stream into a valid beetle-lisp program.
 
-###compile.py
+### compile.py
 Compiles valid beetle-lisp program into DCPU16 assembly from stdin to stdout
 
-###assemble.py
+### assemble.py
 Assembles a valid DCPU (.dasm or .dasm16) program into binary from stdin to stdout 
 
-###dcpu-emulate.py
+### dcpu-emulate.py
 Takes a valid binary DCPU16 instruction stream and interprets it. 
 
-###basm-interpret.py
+### basm-interpret.py
 Takes a valid beetle assembly program on stdin and interprets it.
 Equivalent to `assemble.py | dcpu-emulate.py`, but faster.
 
-###blic.py
+### blic.py
 Beetle lisp interpreter. Takes a valid beetle lisp program on stdin 
 and interprets in within the confines of a virtual DCPU-16.
 Equivalent to `compile.py | assemble.py | dcpu-emulate.py`, but faster.
 
-##Note on emulation/interpretation:
+## Note on emulation/interpretation:
 The specifications for the screen/keyboard/removable memory/etc... are work in progress.
 
 Beetle-Lisp:
