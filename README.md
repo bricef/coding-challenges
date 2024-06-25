@@ -10,6 +10,7 @@ Implementation of the coding challenges from a variety of sources, for example h
 - [x] [Broken link finder](./broken-links)
 - [x] [Large File handling](./large-files/)
 - [x] [Markdown localiser (In JS)](./mdlocaljs)
+- [x] [Factory simulation](./factory-sim)
 
 ## In Progress
 
