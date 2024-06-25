@@ -20,12 +20,12 @@ class FullError(SimError):
     pass
 
 
-class SimEntry:
+class SimulationEntity:
     def tick() -> None:
         raise NotImplementedError
 
 
-class Belt(SimEntry):
+class Belt(SimulationEntity):
     def __init__(self, cells):
         self.cells = cells
 
@@ -42,7 +42,7 @@ class Belt(SimEntry):
         self.refresh()
 
 
-class SimpleWorker(SimEntry):
+class SimpleWorker(SimulationEntity):
     class SimpleWorkerStateMachine(StateMachine):
         # States
         Empty = State(initial=True)
