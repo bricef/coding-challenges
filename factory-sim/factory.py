@@ -1,5 +1,6 @@
 import random
 from enum import Enum
+import csv
 
 from statemachine import State
 from statemachine import StateMachine
@@ -217,7 +218,7 @@ def main():
     "--output-file",
     default=None,
     type=click.File("w"),
-    help="Save simulation data to file",
+    help="Save simulation data to CSV file",
 )
 @click.option("-t", "--ticks", default=100, help="Simulation length in ticks")
 @click.option("-v", "--verbose", default=True, help="Show simulation progress")
@@ -231,18 +232,29 @@ def run(ticks=100, verbose=False, seed=None, belt_length=3, workers=2, **kwargs)
 
     sim = Simulation(ticks=ticks, belt_length=belt_length, workers=workers)
 
-    # TODO: Handle file output
+    writer = None
+    if kwargs["output_file"]:
+        writer = csv.writer(kwargs["output_file"])
+        writer.writerow(["A", "B", "C"])
 
     for _ in range(ticks):
         sim.tick()
         if verbose:
             sim.show()
+        if writer:
+            writer.writerow(
+                [
+                    sim.sink.tally.get(Component.A, 0),
+                    sim.sink.tally.get(Component.B, 0),
+                    sim.sink.tally.get(Component.C, 0),
+                ]
+            )
 
 
 @main.command()
 @click.argument("FILE", type=click.File("w"))
 def show_worker_statemachine(**kwargs):
-    """Save state machine cdiagram for worker in FILE."""
+    """Save state machine diagram for worker in FILE."""
     from statemachine.contrib.diagram import DotGraphMachine
 
     graph = DotGraphMachine(SimpleWorker.SimpleWorkerStateMachine)
