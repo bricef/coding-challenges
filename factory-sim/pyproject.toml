@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "factory-sim"
+version = "0.1.0"
+description = "A factory simulation"
+authors = ["Brice Fernandes <brice@fractallambda.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+click = "^8.1.7"
+python-statemachine = "^2.3.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
