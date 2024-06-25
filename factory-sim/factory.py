@@ -29,7 +29,6 @@ class Belt(SimEntry):
             cell.refresh()
 
     def tick(self):
-        click.echo("Belt Tick")
         self.refresh()
         ouputs = [cell.get() for cell in self.cells]
         self.refresh()
@@ -44,10 +43,10 @@ class SimpleWorker(SimEntry):
         Empty = State(initial=True)
         A = State()
         B = State()
-        AB = State()
-        Work1 = State()
-        Work2 = State()
-        Work3 = State()
+        AB = State("AB")
+        Work1 = State("Working...")
+        Work2 = State("Working...")
+        Work3 = State("Working...")
         C = State()
 
         # Transitions
@@ -81,7 +80,6 @@ class SimpleWorker(SimEntry):
         self.machine = SimpleWorker.SimpleWorkerStateMachine(cell)
     
     def tick(self):
-        click.echo("Worker Tick")
         match self.cell.peek():
             case Component.A:
                 self.machine.cell_a()
@@ -193,18 +191,27 @@ def main():
 @click.option('-b', '--belt-length', default=3, help='Length of belt')
 @click.option('-w', '--workers', default=2, help='Number of workers per work cell')
 def run(ticks=100, verbose=False, seed=None, belt_length=3, workers=2, **kwargs):
-    """Runs the factory simulation, outputing data to OUT_FILE."""
+    """Runs the factory simulation."""
     if seed is not None:
         random.seed(seed)
     
     sim = Simulation(ticks=ticks, belt_length=belt_length, workers=workers)
+
+    # TODO: Handle file output
 
     for _ in range(ticks):
         sim.tick()   
         if verbose:
             sim.show()     
     
-    
+@main.command()
+@click.argument('FILE', type=click.File('w'))
+def show_worker_statemachine(**kwargs):
+    """Save state machine cdiagram for worker in FILE."""
+    from statemachine.contrib.diagram import DotGraphMachine
+    graph = DotGraphMachine(SimpleWorker.SimpleWorkerStateMachine)
+    dot = graph()
+    dot.write_png(kwargs['file'].name)
         
 if __name__ == '__main__':
     main()
