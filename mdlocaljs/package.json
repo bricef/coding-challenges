@@ -1,9 +1,14 @@
 {
   "name": "mdlocal",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "A markdown file image localiser",
   "main": "index.js",
   "type": "module",
+  "homepage":"https://github.com/bricef/coding-challenges/tree/main/mdlocaljs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bricef/coding-challenges/tree/main/mdlocaljs"
+  },
   "directories": {
     "test": "tests"
   },
@@ -11,7 +16,11 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "bin": { "mdlocaljs": "./index.js" },
-  "author": "Brice Fernandes",
+  "author": {
+    "name":"Brice Fernandes",
+    "email": "brice@fractallambda.com",
+    "url": "https://fractallambda.com"
+  },
   "license": "MIT",
   "dependencies": {
     "commander": "^12.0.0",
