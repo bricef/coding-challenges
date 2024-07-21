@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import util from 'util'
+import path from 'path'
 import remarkParse from 'remark-parse'
 import remarkStringify from 'remark-stringify'
 import remarkFrontmatter from 'remark-frontmatter'
@@ -10,16 +12,19 @@ import { program } from "commander";
 
 async function downloadImage(url, location) {
     let filename = url.split('/').pop();
-    fs.ensureDir(location);
-    let relurl = `${location}/${filename}`;
-    
+    let image_file_location = `${location}/${filename}`;
     let data = await fetch(url);
     let buffer = await data.arrayBuffer();
-    await fs.writeFile(relurl, new Uint8Array(buffer));
-    return relurl;
+    await fs.writeFile(image_file_location, new Uint8Array(buffer));
+    return image_file_location;
+
 }
 
-function remarkImageLocaliser({directory}) {
+function is_remote_url (url) {
+  return url.startsWith('http://') || url.startsWith('https://');
+}
+
+function remarkImageLocaliser({filepath, download_directory, }) {
   /**
    * @param {import('mdast').Root} tree
    */
@@ -34,8 +39,16 @@ function remarkImageLocaliser({directory}) {
 
     for(const img of images){
         let url = img.url;
-        let localurl = await downloadImage(url, directory);
-        img.url = localurl;
+        if(is_remote_url(url)){
+          try{
+            let image_file_location = await downloadImage(url, download_directory);
+            let localurl = path.relative(path.dirname(filepath), image_file_location);
+            img.url = localurl;
+          }catch(e){
+            console.error(`Failed to download image ${url} on line ${util.inspect(img.position.start.line)} ${e}`);
+          }
+        }
+        
     }
 
     return tree;
@@ -53,28 +66,37 @@ function remarkImageLocaliser({directory}) {
     .option('-i, --input <filepath>', 'File path to process', 'stdin')
     .option('-d, --directory <dirpath>', 'Directory path to download images to', './images')
     .option('-o, --output <outputpath>', 'Output path', 'stdout')
+    .option('-r', '--replace', 'Modify the markdown file in place')
     .action(async (options) => {
-      console.log(options);
+      // console.log(options);
       let input;
       let output;
+      let root_path;
       if (options.input === 'stdin') {
         input = process.stdin;
+        root_path = process.cwd();
       }else{
         input = await fs.readFile(options.input);
-      }
-
-      if (options.output === 'stdout') {
-        output = process.stdout;
-      } else {
-        output = await fs.createWriteStream(options.output);
+        root_path = options.input;
       }
 
       let t = await unified()
         .use(remarkParse)
         .use(remarkFrontmatter)
         .use(remarkGfm)
-        .use(remarkImageLocaliser, {directory: options.directory})
+        .use(remarkImageLocaliser, {filepath: root_path, download_directory: options.directory})
         .use(remarkStringify);
+
+      if(options.r){
+        console.log(`Modifying ${options.input} in place.`)
+        output = await fs.createWriteStream(options.input)
+      }else if(options.output == 'stdout') {
+        output = process.stdout;
+      }else{
+        output = await fs.createWriteStream(options.output);
+      }
+
+      fs.ensureDir(options.directory);
 
       let result = await t.process(input);
 
