@@ -66,7 +66,7 @@ function remarkImageLocaliser({filepath, download_directory, }) {
     .option('-i, --input <filepath>', 'File path to process', 'stdin')
     .option('-d, --directory <dirpath>', 'Directory path to download images to', './images')
     .option('-o, --output <outputpath>', 'Output path', 'stdout')
-    .option('-r', '--replace', 'Modify the markdown file in place')
+    .option('-r, --replace', 'Modify the markdown file in place')
     .action(async (options) => {
       // console.log(options);
       let input;
@@ -87,7 +87,7 @@ function remarkImageLocaliser({filepath, download_directory, }) {
         .use(remarkImageLocaliser, {filepath: root_path, download_directory: options.directory})
         .use(remarkStringify);
 
-      if(options.r){
+      if(options.replace){
         console.log(`Modifying ${options.input} in place.`)
         output = await fs.createWriteStream(options.input)
       }else if(options.output == 'stdout') {
