@@ -60,9 +60,9 @@ function remarkImageLocaliser({filepath, download_directory, }) {
 (async function main(){
   
   program
-    .name('mdlocaljs')
+    .name('mdlocal')
     .description('A utility to process markdown files and download images locally.')
-    .version('1.0.1')
+    .version('1.0.2')
     .option('-i, --input <filepath>', 'File path to process', 'stdin')
     .option('-d, --directory <dirpath>', 'Directory path to download images to', './images')
     .option('-o, --output <outputpath>', 'Output path', 'stdout')

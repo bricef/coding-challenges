@@ -1,4 +1,4 @@
-# `mdlocaljs`
+# `mdlocal`
 
 ## About
 
@@ -7,7 +7,7 @@
 ## Usage
 
 ```shell
-Usage: mdlocaljs [options]
+Usage: mdlocal [options]
 
 A utility to process markdown files and download images locally.
 
@@ -16,8 +16,7 @@ Options:
   -i, --input <filepath>     File path to process (default: "stdin")
   -d, --directory <dirpath>  Directory path to download images to (default: "./images")
   -o, --output <outputpath>  Output path (default: "stdout")
+  -r, --replace              Modify the markdown file in place
   -h, --help                 display help for command
 ```
-## Todo
 
-- [ ] build into standalone binary
