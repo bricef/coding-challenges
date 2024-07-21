@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import remarkParse from 'remark-parse'
 import remarkStringify from 'remark-stringify'
 import remarkFrontmatter from 'remark-frontmatter'
