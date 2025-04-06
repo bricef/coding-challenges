@@ -11,6 +11,7 @@ Implementation of the coding challenges from a variety of sources, for example h
 - [x] [Large File handling](./large-files/)
 - [x] [Markdown localiser (In JS)](./mdlocaljs)
 - [x] [Factory simulation](./factory-sim)
+- [x] [Brainfuck-Rs](./brainfuck-rs)
 
 ## In Progress
 
