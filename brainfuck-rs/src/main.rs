@@ -1,3 +1,5 @@
+mod vm;
+
 use std::io::Read;
 
 use clap::Parser;
