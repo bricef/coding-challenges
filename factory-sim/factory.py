@@ -190,7 +190,6 @@ class RandomSource(Cell):
         return component
 
 
-
 class TallySink(Cell):
     def __init__(self):
         self.tally = Counter()
@@ -226,13 +225,15 @@ class Simulation:
         self.belt.tick()
         for worker in self.workers:
             worker.tick()
-    
+
     def stats(self):
         return {
             "input": self.source.tally,
             "output": self.sink.tally,
             "belt": Counter([cell.peek() for cell in self.belt.cells]),
-            "workers": Counter(chain.from_iterable([worker.peek() for worker in self.workers])),
+            "workers": Counter(
+                chain.from_iterable([worker.peek() for worker in self.workers])
+            ),
         }
 
     def show(self):
@@ -287,18 +288,24 @@ def run(ticks=100, verbose=False, seed=None, belt_length=3, workers=2, **kwargs)
         pprint.pprint(stats)
         print()
         print("INVARIANTS:")
-        output = (stats["output"].get(Component.C, 0)*2)
+        output = stats["output"].get(Component.C, 0) * 2
         output += stats["output"].get(Component.A, 0)
         output += stats["output"].get(Component.B, 0)
         output += stats["workers"].get(Component.A, 0)
         output += stats["workers"].get(Component.B, 0)
-        output += stats["workers"].get(Component.C, 0)*2
+        output += stats["workers"].get(Component.C, 0) * 2
         output += stats["belt"].get(Component.A, 0)
         output += stats["belt"].get(Component.B, 0)
-        output += (stats["belt"].get(Component.C, 0)*2)
-        input = stats["input"].get(Component.A, 0) + stats["input"].get(Component.B, 0)
-        print(f"{'✅' if output == input else '❌'} 2Po+Ao+Bo+Aw+Bw+2Pw+Ab+Bb+2Pb = Ai+Bi{'' if output == input else f'; {output} != {input}'}")
+        output += stats["belt"].get(Component.C, 0) * 2
 
+        input = stats["input"].get(Component.A, 0)
+        input += stats["input"].get(Component.B, 0)
+
+        symbol = "✅" if output == input else "❌"
+        formula = "2Po+Ao+Bo+Aw+Bw+2Pw+Ab+Bb+2Pb = Ai+Bi"
+        details = "" if output == input else f"; {output} != {input}"
+
+        print(f"{symbol} {formula}{details}")
 
 
 @main.command()
