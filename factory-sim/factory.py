@@ -24,12 +24,32 @@ class FullError(SimError):
 
 
 class SimulationEntity:
-    def tick() -> None:
+    def tick(self) -> None:
         raise NotImplementedError
 
 
+class Component(Enum):
+    A, B, C = range(3)
+
+    def __repr__(self) -> str:
+        return format(self.name)
+
+class Cell:
+    def peek(self) -> Component | None:
+        return None
+
+    def get(self) -> Component | None:
+        return None
+
+    def put(self, component: Component):
+        pass
+
+    def refresh(self):
+        pass
+
+
 class Belt(SimulationEntity):
-    def __init__(self, cells):
+    def __init__(self, cells: list[Cell]):
         self.cells = cells
 
     def refresh(self):
@@ -117,7 +137,7 @@ class SimpleWorker(SimulationEntity):
             case None:
                 self.machine.cell_empty()
 
-    def peek(self):
+    def inventory(self) -> list[Component]:
         match self.machine.current_state:
             case self.machine.Empty:
                 return [None]
@@ -135,20 +155,10 @@ class SimpleWorker(SimulationEntity):
                 return [Component.A, Component.B]
             case self.machine.C:
                 return [Component.C]
+            case _:
+                raise ValueError(f"Invalid state: {self.machine.current_state}")
 
 
-class Cell:
-    def peek(self):
-        return None
-
-    def get(self):
-        return None
-
-    def put(self, component):
-        pass
-
-    def refresh(self):
-        pass
 
 
 class WorkerCell(Cell):
@@ -156,10 +166,10 @@ class WorkerCell(Cell):
         self.inventory = None
         self.busy = False
 
-    def peek(self):
+    def peek(self) -> Component | None:
         return self.inventory
 
-    def get(self):
+    def get(self) -> Component | None:
         if self.busy:
             raise BusyError("Cell is busy")
         inventory = self.inventory
@@ -167,7 +177,7 @@ class WorkerCell(Cell):
         self.busy = True
         return inventory
 
-    def put(self, component):
+    def put(self, component: Component):
         if self.busy:
             raise BusyError("Cell is busy")
         if self.inventory is not None:
@@ -184,7 +194,7 @@ class RandomSource(Cell):
         self.choices = choices
         self.tally = Counter()
 
-    def get(self):
+    def get(self) -> Component | None:
         component = random.choice(self.choices)
         self.tally[component] += 1
         return component
@@ -194,15 +204,10 @@ class TallySink(Cell):
     def __init__(self):
         self.tally = Counter()
 
-    def put(self, component):
+    def put(self, component: Component):
         self.tally[component] += 1
 
 
-class Component(Enum):
-    A, B, C = range(3)
-
-    def __repr__(self) -> str:
-        return format(self.name)
 
 
 class Simulation:
@@ -232,7 +237,7 @@ class Simulation:
             "output": self.sink.tally,
             "belt": Counter([cell.peek() for cell in self.belt.cells]),
             "workers": Counter(
-                chain.from_iterable([worker.peek() for worker in self.workers])
+                chain.from_iterable([worker.inventory() for worker in self.workers])
             ),
         }
 
@@ -259,9 +264,17 @@ def main():
 @click.option("-w", "--workers", default=2, help="Number of workers per work cell")
 def run(ticks=100, verbose=False, seed=None, belt_length=3, workers=2, **kwargs):
     """Runs the factory simulation."""
+    
+    if belt_length < 2:
+        raise ValueError("Belt length must be at least 2")
+    if workers < 1:
+        raise ValueError("Number of workers must be at least 1")
+    if ticks < 1:
+        raise ValueError("Ticks must be at least 1")
+    
     if seed is not None:
         random.seed(seed)
-
+    
     sim = Simulation(ticks=ticks, belt_length=belt_length, workers=workers)
 
     writer = None
