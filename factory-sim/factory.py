@@ -1,6 +1,9 @@
 import random
 from enum import Enum
 import csv
+from collections import Counter
+from itertools import chain
+import pprint
 
 from statemachine import State
 from statemachine import StateMachine
@@ -114,6 +117,25 @@ class SimpleWorker(SimulationEntity):
             case None:
                 self.machine.cell_empty()
 
+    def peek(self):
+        match self.machine.current_state:
+            case self.machine.Empty:
+                return [None]
+            case self.machine.A:
+                return [Component.A]
+            case self.machine.B:
+                return [Component.B]
+            case self.machine.AB:
+                return [Component.A, Component.B]
+            case self.machine.Work1:
+                return [Component.A, Component.B]
+            case self.machine.Work2:
+                return [Component.A, Component.B]
+            case self.machine.Work3:
+                return [Component.A, Component.B]
+            case self.machine.C:
+                return [Component.C]
+
 
 class Cell:
     def peek(self):
@@ -160,20 +182,21 @@ class WorkerCell(Cell):
 class RandomSource(Cell):
     def __init__(self, choices):
         self.choices = choices
+        self.tally = Counter()
 
     def get(self):
-        return random.choice(self.choices)
+        component = random.choice(self.choices)
+        self.tally[component] += 1
+        return component
+
 
 
 class TallySink(Cell):
     def __init__(self):
-        self.tally = {}
+        self.tally = Counter()
 
     def put(self, component):
-        if component not in self.tally:
-            self.tally[component] = 1
-        else:
-            self.tally[component] += 1
+        self.tally[component] += 1
 
 
 class Component(Enum):
@@ -203,6 +226,14 @@ class Simulation:
         self.belt.tick()
         for worker in self.workers:
             worker.tick()
+    
+    def stats(self):
+        return {
+            "input": self.source.tally,
+            "output": self.sink.tally,
+            "belt": Counter([cell.peek() for cell in self.belt.cells]),
+            "workers": Counter(chain.from_iterable([worker.peek() for worker in self.workers])),
+        }
 
     def show(self):
         print(f"{self.sink.tally}")
@@ -249,6 +280,25 @@ def run(ticks=100, verbose=False, seed=None, belt_length=3, workers=2, **kwargs)
                     sim.sink.tally.get(Component.C, 0),
                 ]
             )
+    if verbose:
+        stats = sim.stats()
+        print()
+        print("STATS:")
+        pprint.pprint(stats)
+        print()
+        print("INVARIANTS:")
+        output = (stats["output"].get(Component.C, 0)*2)
+        output += stats["output"].get(Component.A, 0)
+        output += stats["output"].get(Component.B, 0)
+        output += stats["workers"].get(Component.A, 0)
+        output += stats["workers"].get(Component.B, 0)
+        output += stats["workers"].get(Component.C, 0)*2
+        output += stats["belt"].get(Component.A, 0)
+        output += stats["belt"].get(Component.B, 0)
+        output += (stats["belt"].get(Component.C, 0)*2)
+        input = stats["input"].get(Component.A, 0) + stats["input"].get(Component.B, 0)
+        print(f"{'✅' if output == input else '❌'} 2Po+Ao+Bo+Aw+Bw+2Pw+Ab+Bb+2Pb = Ai+Bi{'' if output == input else f'; {output} != {input}'}")
+
 
 
 @main.command()
