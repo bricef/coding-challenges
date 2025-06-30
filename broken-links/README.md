@@ -2,7 +2,9 @@
 
 ## About
 
-`blf` scans a url for broken links. by default, it will follow links on the same domain and performs the same analysis on these as well. It will work with dynamically generated content and Javascript.
+`blf` scans a url for broken links. by default, it will follow links 
+on the same domain and perform the same analysis on these as well. 
+It will work with dynamically generated content and Javascript.
 
 ## Usage
 
@@ -22,7 +24,7 @@ Options:
 
 ## Enhancements
 - [ ] Extract worker setup into dedicated library.
-- [ ] Separate scanenrs into tehir own modules.
+- [ ] Separate scanners into their own modules.
 - [ ] Scan clickable elements, not just hyperlinks.
 - [ ] Show xpath of elements which have broken links.
 
