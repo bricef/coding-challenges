@@ -2,7 +2,7 @@
 
 ## About
 
-`blf` scans a url for broken links. by default, it will follow links on the same domain ad perform the same analysis on these as well. It will work with dynamically generated content and Javascript.
+`blf` scans a url for broken links. by default, it will follow links on the same domain and performs the same analysis on these as well. It will work with dynamically generated content and Javascript.
 
 ## Usage
 
