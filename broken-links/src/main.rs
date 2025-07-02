@@ -75,6 +75,7 @@ struct Link{
 struct PageScannerOptions {
     scope: HashSet<Url>,
     follow: bool,
+    headers: Vec<String>,
     // clickable: bool,
     // dynamic: bool,
 }
@@ -222,7 +223,7 @@ impl PageScanner {
 
     async fn page_to_hrefs(&mut self, url: &Page) -> Result<Vec<Link>, anyhow::Error> {
         let mut hrefs: HashSet<Url> = HashSet::new();
-
+        
         self.client.goto(url.as_str()).await?;
 
         let canonify = | fragment : &str | canonical(url, fragment);
@@ -482,6 +483,7 @@ fn build_browser_capabilities() -> fantoccini::wd::Capabilities{
     capabilities.insert("moz:firefoxOptions".to_string(), browser_options.clone());
     // capabilities.insert("browserName".to_string(), serde_json::json!("Firefox"));
     // capabilities.insert("browserVersion".to_string(), serde_json::json!("105"));
+    
     return capabilities;
 }
 
@@ -517,11 +519,19 @@ fn main() -> Result<(), anyhow::Error>{
         //         .help("Scan for all elements that react to clicks, not juts hyperlinks. (False by default).")
         //         .action(ArgAction::SetTrue),
         // )
+        .arg(
+            Arg::new("header")
+                .short('H')
+                .long("header")
+                .help("Set header for requests. Can be specified multiple times.")
+                .action(ArgAction::Append),
+        )
         .get_matches();
 
 
     let parsed_url = parse_target(matches.get_one::<String>("URL").unwrap())?;
     let host_url = host_url_from(&parsed_url)?;
+    let headers: Vec<String> = matches.get_many::<String>("header").unwrap_or_default().map(|v| String::from(v)).collect::<Vec<_>>();
 
     // Set permitted scan hosts 
     let mut permitted_hosts = HashSet::new();
@@ -553,6 +563,7 @@ fn main() -> Result<(), anyhow::Error>{
             PageScannerOptions {
                 scope: permitted_hosts,
                 follow: matches.get_flag("follow"),
+                headers: headers,
                 // clickable: matches.get_flag("clickable"),
                 // dynamic: matches.get_flag("dynamic"),
             },
