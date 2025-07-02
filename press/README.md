@@ -27,7 +27,7 @@ $ cargo install --path .
 1. Currently _very_ slow, especially at decompressing due to naive implementation.
 2. All work is carried out in-memory, and so files larger than RAM cannot be compressed.
 3. Has no run-length encoding so does not compress repeated symbols well.
-4. Forces symbols to be 8-bit or EOF. Could be acheive better compression ratios with longer or tunable-length symbols.
+4. Forces symbols to be 8-bit or EOF. Could be achieve better compression ratios with longer or tunable-length symbols.
 
 
 ## Improvements
@@ -45,5 +45,5 @@ $ cargo install --path .
 - **Huffman Encoding**
 - **Huffman encoding must also include EOT symbol** (or the size of the symbol stream) or the decoding logic won't be able to determine when to terminate and will decode uninitialised memory within the last word boudnary.
 - **Chained constructors** (see `HuffmanEncoding` implementation) are useful to bootstrap objects and progressively simplify APIs
-- **Protocol grammars are easily encoded** for example, protocol start and end symbols can be included when building the frequency table and we could artifically modify the Huffman tree to include protocol symbols with arbitrary size.
+- **Protocol grammars are easily encoded** for example, protocol start and end symbols can be included when building the frequency table and we could artificially modify the Huffman tree to include protocol symbols with arbitrary size.
 - The Huffman trees of two encoding can be easily merged to encode both in a single tree
