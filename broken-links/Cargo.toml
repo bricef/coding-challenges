@@ -16,6 +16,7 @@ reqwest = "0.11.24"
 crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 indicatif = { version = "0.17.8", features = ["tokio"] }
 itertools = "0.12.1"
+cookie = "0.18.1"
 
 [target.x86_64-unknown-linux-gnu]
 linker = "/usr/bin/clang"

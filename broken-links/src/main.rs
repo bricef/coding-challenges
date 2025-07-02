@@ -10,6 +10,8 @@ use clap::Command;
 use clap::{Arg, ArgAction};
 use anyhow::{anyhow, Result};
 use fantoccini::{ClientBuilder, Locator};
+use cookie::{SameSite};
+use fantoccini::cookies::Cookie;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use tokio::runtime;
 use tokio::sync::Mutex;
@@ -75,7 +77,7 @@ struct Link{
 struct PageScannerOptions {
     scope: HashSet<Url>,
     follow: bool,
-    headers: Vec<String>,
+    cookies: Vec<String>,
     // clickable: bool,
     // dynamic: bool,
 }
@@ -520,10 +522,9 @@ fn main() -> Result<(), anyhow::Error>{
         //         .action(ArgAction::SetTrue),
         // )
         .arg(
-            Arg::new("header")
-                .short('H')
-                .long("header")
-                .help("Set header for requests. Can be specified multiple times.")
+            Arg::new("cookie")
+                .long("cookie")
+                .help("Set cookie for requests. Can be specified multiple times.")
                 .action(ArgAction::Append),
         )
         .get_matches();
@@ -531,11 +532,11 @@ fn main() -> Result<(), anyhow::Error>{
 
     let parsed_url = parse_target(matches.get_one::<String>("URL").unwrap())?;
     let host_url = host_url_from(&parsed_url)?;
-    let headers: Vec<String> = matches.get_many::<String>("header").unwrap_or_default().map(|v| String::from(v)).collect::<Vec<_>>();
+    let cookies: Vec<String> = matches.get_many::<String>("cookie").unwrap_or_default().map(|v| String::from(v)).collect::<Vec<_>>();
 
     // Set permitted scan hosts 
     let mut permitted_hosts = HashSet::new();
-    permitted_hosts.insert(host_url);
+    permitted_hosts.insert(host_url.clone());
 
     let rt = runtime::Runtime::new()?; // multithreaded runtime
 
@@ -555,6 +556,27 @@ fn main() -> Result<(), anyhow::Error>{
                 .await?
         );
 
+        for cookie in &cookies {
+            let mut c = Cookie::parse(cookie.to_owned()).unwrap();
+            let domain = host_url.clone().domain().unwrap().to_string();
+            println!("Setting cookie domain to {}", domain);
+            c.set_domain(domain);
+            c.set_path("/");
+            c.set_same_site(Some(SameSite::Lax));
+
+            let _ = match client.add_cookie(c).await {
+                Ok(_) => println!("Cookie set"),
+                Err(e) => {
+                    if let Some(client) = Arc::into_inner(client) {
+                        client.close().await?;
+                    }else {
+                        eprintln!("WARNING: Failed to close client");
+                    }
+                    panic!("Error setting cookie: {}", e)
+                }
+            };
+        }
+
         let mut page_scanner = PageScanner::new(
             pages.clone(),
             links.clone(),
@@ -563,7 +585,7 @@ fn main() -> Result<(), anyhow::Error>{
             PageScannerOptions {
                 scope: permitted_hosts,
                 follow: matches.get_flag("follow"),
-                headers: headers,
+                cookies: cookies,
                 // clickable: matches.get_flag("clickable"),
                 // dynamic: matches.get_flag("dynamic"),
             },
