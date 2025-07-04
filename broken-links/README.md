@@ -25,13 +25,13 @@ Options:
 
 ## Enhancements
 - [ ] Extract worker setup into dedicated library.
-- [ ] Separate scanners into their own modules.
 - [ ] Scan clickable elements, not just hyperlinks.
 - [ ] Show xpath of elements which have broken links.
 - [ ] Enable setting user agent
 
 ## Todo
 
+- [x] Separate scanners into their own modules.
 - [x] Scrape a single static page
 - [x] Transitive scrape of links within domain (`--follow` option)
 - [x] Run JS on page to get link
