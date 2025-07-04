@@ -1,24 +1,28 @@
-use std::cmp;
 use std::collections::{HashMap, HashSet};
 
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 
 use clap::Command;
 use clap::{Arg, ArgAction};
 use anyhow::{anyhow, Result};
-use fantoccini::{ClientBuilder, Locator};
+use fantoccini::ClientBuilder;
 use cookie::SameSite;
 use fantoccini::cookies::Cookie;
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use tokio::runtime;
 use tokio::sync::Mutex;
-use url::{Url, ParseError};
+use url::Url;
 
+mod url_utils;
 mod link_scanner;
-use link_scanner::LinkScanner;
+use link_scanner::{LinkScanner, LinkFailure};
+
+mod page_scanner;
+use page_scanner::{PageScanner, PageScannerOptions, Page, PageFailure};
+
+mod monitor;
+use monitor::Monitor;
 
 #[derive(Debug, Clone, Hash)]
 enum Reason {
@@ -45,22 +49,6 @@ impl PartialEq for Reason {
 
 }
 
-
-
-
-#[derive(Debug)]
-struct LinkFailure {
-    link: Link,
-    reason: Reason,
-} 
-
-#[derive(Debug)]
-struct PageFailure {
-    page: Url,
-    reason: Reason,
-}
-
-
 #[derive(Debug)]
 enum ScanResult {
     LinkFailure(LinkFailure),
@@ -69,287 +57,10 @@ enum ScanResult {
     LinkSuccess(Link)
 }
 
-
 #[derive(Debug)]
 struct Link{
     source: Url,
     link: Url,
-}
-
-#[allow(dead_code)]
-struct PageScannerOptions {
-    scope: HashSet<Url>,
-    follow: bool,
-    // clickable: bool,
-    // dynamic: bool,
-}
-
-#[allow(dead_code)]
-
-
-type Page = Url;
-
-fn canonical (base : &Url, url: &str) -> Result<Url, anyhow::Error> {
-    match Url::parse(url) {
-        Ok(parsed) => {
-            let scheme = parsed.scheme();
-            if !scheme.is_empty() && !scheme.starts_with("http") {
-                // println!("Invalid scheme for {}: {}", parsed.as_str(), parsed.scheme());
-                return Err(anyhow!("Invalid scheme for {}", parsed.as_str()));
-            }
-            let mut parsed = parsed;
-            parsed.set_fragment(None);
-            Ok(parsed)
-        },
-        Err(ParseError::RelativeUrlWithoutBase) => {
-            let mut parsed = base.join(url)?;
-            parsed.set_fragment(None);
-            Ok(parsed)
-        },
-        Err(e) => {
-            println!("Invalid URL: {}", e);
-            Err(anyhow!("Invalid URL: {}", e))
-        }
-    }
-}
-
-
-mod test{
-    #[allow(unused_imports)]
-    use super::*;
-
-    #[test]
-    fn test_canonical() {
-        let base = Url::parse("http://example.com").unwrap();
-        let canon = move | url: &str | canonical(&base, url);
-
-        assert_eq!(canon("http://example.com").unwrap().to_string(), "http://example.com/");
-        assert_eq!(canon("https://example.com").unwrap().to_string(), "https://example.com/");
-        assert_eq!(canon("ftp://example.com").unwrap_err().to_string(), "Invalid scheme for ftp://example.com/");
-        assert_eq!(canon("/foo/bar").unwrap().to_string(), "http://example.com/foo/bar");
-    }
-
-}
-struct PageScanner {
-    seen: HashSet<Url>,
-    pages: Arc<Mutex<Vec<Page>>>,
-    links: Arc<Mutex<Vec<Link>>>,
-    results: Arc<Mutex<Vec<ScanResult>>>,
-    client: Arc<fantoccini::Client>,
-    options: PageScannerOptions,
-    exit: Arc<AtomicBool>,
-    // scanned: HashSet<String>,
-    // channels: PageScannerChannels,
-}
-
-impl PageScanner {
-    // async fn default() -> Result<Self, anyhow::Error> {
-    //     Scanner::new(ScannerOptions {
-    //         follow: true,
-    //         clickable: true,
-    //         dynamic: true,
-    //     }).await
-    // }
-    fn new(
-        pages: Arc<Mutex<Vec<Page>>>, 
-        links: Arc<Mutex<Vec<Link>>>, 
-        results: Arc<Mutex<Vec<ScanResult>>>, 
-        client: Arc<fantoccini::Client>, 
-        options: PageScannerOptions,
-        exit: Arc<AtomicBool>
-    ) -> Result<Self, anyhow::Error> {   
-        Ok(PageScanner {
-            seen: HashSet::new(),
-            pages,
-            links,
-            results,
-            client,
-            options,
-            exit
-        })
-    }
-
-    async fn start(&mut self) -> Result<(), anyhow::Error>{
-        // println!("Starting page scanner");
-        
-        loop {
-            let mut pages = self.pages.lock().await;
-            let next_page = pages.pop();
-            drop(pages);
-
-            match next_page {
-                Some(p) => {
-                    // Ignore already scanned pages
-                    if self.seen.contains(&p) {
-                        continue;
-                    }
-                    // We haven't scanned this one before. 
-                    // Add it to the list of seen pages
-                    self.seen.insert(p.clone());
-                    
-                    // Scan the page
-                    let hrefs = self.page_to_hrefs(&p).await;
-                    
-                    // Process the results
-                    match hrefs {
-                        Ok(hrefs) => {
-
-                            let mut results = self.results.lock().await;
-                            results.push(ScanResult::PageSuccess(p.clone()));
-                            drop(results);
-                            
-
-                            for h in hrefs {
-                                let host = host_url_from(&h.link)?;
-                                if self.options.scope.contains(&host) && self.options.follow { 
-                                    // Same domain
-                                    self.pages.lock().await.push(h.link);
-                                } else { 
-                                    // external link
-                                    self.links.lock().await.push(h);
-                                }
-                            }
-                        },
-                        Err(e) => {
-                            self.results.lock().await.push(ScanResult::PageFailure(PageFailure{page:p , reason: Reason::Other(e.to_string())}));
-                        }
-                    }
-                },
-                None => tokio::time::sleep(Duration::from_millis(100)).await,
-            }
-            if self.exit.load(Ordering::Relaxed) {
-                break;
-            }
-        }   
-        // println!("Ending page scanner");
-        Ok(())
-    }
-
-    async fn page_to_hrefs(&mut self, url: &Page) -> Result<Vec<Link>, anyhow::Error> {
-        let mut hrefs: HashSet<Url> = HashSet::new();
-        
-        self.client.goto(url.as_str()).await?;
-
-        let canonify = | fragment : &str | canonical(url, fragment);
-        
-        // search for hrefs
-        let refs =  self.client.find_all(Locator::Css("[href]")).await?;
-        for r in refs {
-            match r.attr("href").await {
-                Ok(Some(href)) => match canonify(&href) {
-                    Ok(canon) => drop(hrefs.insert(canon)),
-                    Err(_) => (), // Ignore bad URLs
-                },
-                Ok(None) => (), // Ignore no href
-                Err(_) => (), // Ignore no href
-            }
-        }
-
-        // search for sources
-        let srcs= self.client.find_all(Locator::Css("[src]")).await?;
-        for r in srcs {
-            match r.attr("src").await {
-                Ok(Some(href)) => match canonify(&href) {
-                    Ok(canon) => drop(hrefs.insert(canon)),
-                    Err(_) => (), // Ignore bad URLs
-                },
-                Ok(None) => (), // Ignore no href
-                Err(_) => (), // Ignore no href
-            }
-        }
-
-        let out = hrefs.into_iter().map(|h| Link{source: url.clone(), link: h}).collect();
-        Ok(out)
-    }
-}
-
-
-struct Monitor{
-    pages: Arc<Mutex<Vec<Page>>>,
-    links: Arc<Mutex<Vec<Link>>>,
-    results: Arc<Mutex<Vec<ScanResult>>>,
-}
-
-impl Monitor {
-    fn new(
-        pages: Arc<Mutex<Vec<Page>>>,
-        links: Arc<Mutex<Vec<Link>>>,
-        results: Arc<Mutex<Vec<ScanResult>>>,
-    ) -> Self {
-        Monitor{ pages, links, results }
-    }
-    async fn start(&mut self){
-        // println!("Starting updater");
-        let m = MultiProgress::new();
-        let sty = ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7} {msg}")
-            .unwrap()
-            .progress_chars("##-");
-
-        let pages_todo = m.add(ProgressBar::new(100));
-        pages_todo.set_style(sty.clone());
-        pages_todo.set_message("Unscanned Pages");
-
-        // let pages_done = m.add(ProgressBar::new(100));
-        // pages_done.set_style(sty.clone());
-        // pages_done.set_message("Scanned Pages");
-        
-        let links_todo = m.add(ProgressBar::new(100));
-        links_todo.set_style(sty.clone());
-        links_todo.set_message("Unscanned Links");
-        
-        // let links_done = m.add(ProgressBar::new(100));
-        // links_done.set_style(sty.clone());
-        // links_done.set_message("Scanned Links");
-        
-        let results_done = m.add(ProgressBar::new(100));
-        results_done.set_position(0);
-        results_done.set_style(sty.clone());
-        results_done.set_message("Results");
-        results_done.enable_steady_tick(Duration::from_millis(100));
-
-        let mut results_max = 0;
-
-        loop {
-            let pages = self.pages.lock().await;
-            let links = self.links.lock().await;
-            let results = self.results.lock().await;
-
-            let pages_todo_count = pages.len();
-            let links_todo_count = links.len();
-            let results_count = results.len();
-
-            drop(pages);
-            drop(links);
-            drop(results);
-
-            let total = pages_todo_count + links_todo_count + results_count;
-
-            pages_todo.set_length(total as u64);
-            pages_todo.set_position(pages_todo_count as u64);
-
-            links_todo.set_length(total as u64);
-            links_todo.set_position(links_todo_count as u64);
-
-            results_done.set_length(total as u64);
-            if results_count > results_max {
-                results_max = results_count;
-            }
-            results_done.set_position(cmp::max(results_max, results_count) as u64);
-            
-            tokio::time::sleep(Duration::from_millis(100)).await;
-
-            if pages_todo_count == 0 && links_todo_count == 0 && results_count != 0 {
-                break;
-            }
-        }
-
-        pages_todo.finish_and_clear();
-        links_todo.finish_and_clear();
-        results_done.finish_and_clear();
-        m.clear().unwrap();
-        // println!("Ending updater");
-        
-    }
 }
 
 #[derive(Debug)]

@@ -1,5 +1,3 @@
-
-
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -7,8 +5,13 @@ use reqwest::Client;
 
 use tokio::sync::Mutex;
 
-use crate::{Link, ScanResult, LinkFailure, Reason};
+use crate::{Link, ScanResult, Reason};
 
+#[derive(Debug)]
+pub struct LinkFailure {
+    pub link: Link,
+    pub reason: Reason,
+}
 
 pub struct LinkScanner {
     input: Arc<Mutex<Vec<Link>>>,
