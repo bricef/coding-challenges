@@ -17,9 +17,10 @@ Arguments:
   <URL>  The URL to scan.
 
 Options:
-  -f, --follow   Follow links and perform analysis on all pages in subdomain. (False by default).
-  -h, --help     Print help
-  -V, --version  Print version
+  -f, --follow           Follow links and perform analysis on all pages in subdomain. (False by default).
+      --cookie <cookie>  Set cookie for requests. Can be specified multiple times.
+  -h, --help             Print help
+  -V, --version          Print version
 ```
 
 ## Enhancements
