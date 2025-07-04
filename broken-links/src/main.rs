@@ -10,7 +10,7 @@ use clap::Command;
 use clap::{Arg, ArgAction};
 use anyhow::{anyhow, Result};
 use fantoccini::{ClientBuilder, Locator};
-use cookie::{SameSite};
+use cookie::SameSite;
 use fantoccini::cookies::Cookie;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use tokio::runtime;
@@ -77,7 +77,6 @@ struct Link{
 struct PageScannerOptions {
     scope: HashSet<Url>,
     follow: bool,
-    cookies: Vec<String>,
     // clickable: bool,
     // dynamic: bool,
 }
@@ -556,15 +555,20 @@ fn main() -> Result<(), anyhow::Error>{
                 .await?
         );
 
+        // We need this in order to set the cookies
+        // As the webdriver protocol doesn't support setting cookies 
+        // on a domain we're not already on. :shrug:
+        client.goto(parsed_url.as_str()).await?;
+
         for cookie in &cookies {
             let mut c = Cookie::parse(cookie.to_owned()).unwrap();
             let domain = host_url.clone().domain().unwrap().to_string();
-            println!("Setting cookie domain to {}", domain);
             c.set_domain(domain);
+            c.set_secure(true);
             c.set_path("/");
             c.set_same_site(Some(SameSite::Lax));
 
-            let _ = match client.add_cookie(c).await {
+            let _ = match client.add_cookie(c.clone()).await {
                 Ok(_) => println!("Cookie set"),
                 Err(e) => {
                     if let Some(client) = Arc::into_inner(client) {
@@ -585,7 +589,6 @@ fn main() -> Result<(), anyhow::Error>{
             PageScannerOptions {
                 scope: permitted_hosts,
                 follow: matches.get_flag("follow"),
-                cookies: cookies,
                 // clickable: matches.get_flag("clickable"),
                 // dynamic: matches.get_flag("dynamic"),
             },

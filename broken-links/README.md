@@ -27,6 +27,7 @@ Options:
 - [ ] Separate scanners into their own modules.
 - [ ] Scan clickable elements, not just hyperlinks.
 - [ ] Show xpath of elements which have broken links.
+- [ ] Enable setting user agent
 
 ## Todo
 

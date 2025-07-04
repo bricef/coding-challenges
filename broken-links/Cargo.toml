@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.79"
 clap = "4.4.18"
-fantoccini = "0.19.3"
+fantoccini = "0.22.0"
 failure = "0.1.8"
 headless_chrome = { version = "1.0.9", features = ["fetch"] }
 tokio = { version = "1.36.0", features = ["time", "full"] }
