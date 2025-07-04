@@ -7,11 +7,14 @@ Implementation of the coding challenges from a variety of sources, for example h
 - [x] [Write Your Own `wc` Tool](./wc)
 - [x] [Write Your Own Compression Tool](./press)
 - [x] [File deduplicator](./deduplicator)
-- [x] [Broken link finder](./broken-links)
 - [x] [Large File handling](./large-files/)
 - [x] [Markdown localiser (In JS)](./mdlocaljs)
 - [x] [Factory simulation](./factory-sim)
 - [x] [Brainfuck-Rs](./brainfuck-rs)
+
+## Migrated 
+
+- **Broken link finder** has migrated to [the Tools repository](https://github.com/bricef/Tools)
 
 ## In Progress
 
